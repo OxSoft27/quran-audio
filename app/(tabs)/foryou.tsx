@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { useTheme } from '@/context/ThemeContext';
 import { useAudio } from '@/context/AudioContext';
 import { SurahListItem } from '@/components/SurahListItem';
@@ -70,7 +72,7 @@ export default function ForYouScreen() {
             </View>
 
             {loading ? (
-                <ActivityIndicator size="large" color={Colors[theme].tint} style={{ marginTop: 50 }} />
+                <ActivityIndicator size="large" color={Colors[theme].tint} style={{ marginTop: Spacing['5xl'] }} />
             ) : (
                 <FlatList
                     data={dailySurahs}
@@ -94,17 +96,16 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        padding: 20,
+        padding: Spacing.pagePadding,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '700',
+        ...Typography.preset.title1,
     },
     subtitle: {
-        fontSize: 14,
-        marginTop: 4,
+        fontSize: Typography.size.subhead,
+        marginTop: Spacing.xs,
     },
     listContent: {
-        paddingBottom: 100,
+        paddingBottom: Spacing['8xl'],
     },
 });

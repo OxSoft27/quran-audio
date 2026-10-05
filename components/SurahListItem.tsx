@@ -1,4 +1,6 @@
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { useTheme } from '@/context/ThemeContext';
 import { Surah } from '@/services/quranApi';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,7 +42,7 @@ export const SurahListItem: React.FC<SurahListItemProps> = ({ surah, isPlaying, 
                             e.stopPropagation();
                             onToggleFavorite();
                         }}
-                        style={{ padding: 4, marginTop: 4 }}
+                        style={{ padding: Spacing.xs, marginTop: Spacing.xs }}
                     >
                         <Ionicons
                             name={isFavorite ? "heart" : "heart-outline"}
@@ -52,7 +54,7 @@ export const SurahListItem: React.FC<SurahListItemProps> = ({ surah, isPlaying, 
             </View>
 
             {isPlaying && (
-                <Ionicons name="stats-chart" size={16} color={Colors[theme].tint} style={{ marginLeft: 10 }} />
+                <Ionicons name="stats-chart" size={16} color={Colors[theme].tint} style={{ marginLeft: Spacing.sm + Spacing.xs }} />
             )}
         </TouchableOpacity>
     );
@@ -62,10 +64,10 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
-        marginHorizontal: 20,
-        marginBottom: 12,
-        borderRadius: 16,
+        padding: Spacing.lg,
+        marginHorizontal: Spacing.pagePadding,
+        marginBottom: Spacing.md,
+        borderRadius: Spacing.lg,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -78,29 +80,36 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: Spacing.lg,
     },
     number: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: Typography.size.subhead,
+        fontWeight: Typography.weight.medium,
+        fontFamily: Typography.fontFamily.primary,
+        fontVariant: ['tabular-nums'],
     },
     infoContainer: {
         flex: 1,
     },
     name: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
+        fontSize: Typography.size.body,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.text,
+        letterSpacing: Typography.tracking.body,
+        marginBottom: Spacing.xs,
     },
     details: {
-        fontSize: 12,
+        fontSize: Typography.size.footnote,
+        fontWeight: Typography.weight.regular,
+        fontFamily: Typography.fontFamily.text,
+        letterSpacing: 0,
     },
     arabicContainer: {
         alignItems: 'flex-end',
     },
     arabicName: {
-        fontSize: 20,
-        fontFamily: 'System',
-        // In a real app, use a proper Arabic font like Amiri or Scheherazade
+        fontSize: 22,
+        fontFamily: Typography.fontFamily.quran,
+        lineHeight: 32,
     },
 });

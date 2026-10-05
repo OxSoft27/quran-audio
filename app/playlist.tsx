@@ -1,4 +1,6 @@
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { usePlaylist } from '@/context/PlaylistContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,8 +42,24 @@ export default function PlaylistScreen() {
                 headerTintColor: Colors[theme].tint,
                 headerShadowVisible: false,
                 headerLeft: () => (
-                    <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -8, paddingRight: 10 }}>
-                        <Ionicons name="chevron-back" size={28} color={Colors[theme].tint} />
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        style={[
+                            styles.backButton,
+                            {
+                                backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF',
+                                borderColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+                            },
+                        ]}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons
+                            name="chevron-back"
+                            size={22}
+                            color={Colors[theme].tint}
+                            style={{ marginRight: 1.5 }}
+                        />
                     </TouchableOpacity>
                 ),
                 headerRight: () => (
@@ -61,7 +79,7 @@ export default function PlaylistScreen() {
                     <FlatList
                         data={playlists}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={{ padding: 20 }}
+                        contentContainerStyle={{ padding: Spacing.pagePadding }}
                         renderItem={({ item }) => (
                             <TouchableOpacity style={[styles.item, { backgroundColor: Colors[theme].card }]}>
                                 <View style={styles.iconContainer}>
@@ -85,6 +103,19 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        elevation: 1,
+    },
     content: {
         flex: 1,
     },
@@ -95,40 +126,35 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     emptyText: {
-        marginTop: 16,
-        fontSize: 16,
-        fontWeight: '500',
+        marginTop: Spacing.lg,
+        fontSize: Typography.size.body,
+        fontWeight: Typography.weight.medium,
     },
     item: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
-        marginBottom: 12,
-        borderRadius: 16,
-        // shadowColor: '#000',
-        // shadowOffset: { width: 0, height: 2 },
-        // shadowOpacity: 0.05,
-        // shadowRadius: 4,
-        // elevation: 2,
+        padding: Spacing.lg,
+        marginBottom: Spacing.md,
+        borderRadius: Spacing.lg,
     },
     iconContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: Spacing['4xl'],
+        height: Spacing['4xl'],
+        borderRadius: Spacing.md,
         backgroundColor: 'rgba(29, 184, 181, 0.1)', // Tint with opacity
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 16,
+        marginRight: Spacing.lg,
     },
     info: {
         flex: 1,
     },
     name: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
+        fontSize: Typography.size.body,
+        fontWeight: Typography.weight.semibold,
+        marginBottom: Spacing.xs,
     },
     count: {
-        fontSize: 13,
+        fontSize: Typography.size.footnote,
     },
 });

@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem('theme_mode', newMode);
     };
 
-    const theme = mode === 'system' ? (systemColorScheme ?? 'light') : mode;
+    const theme: 'light' | 'dark' = mode === 'system' ? (systemColorScheme === 'dark' ? 'dark' : 'light') : mode;
 
     return (
         <ThemeContext.Provider value={{ theme, mode, setMode }}>

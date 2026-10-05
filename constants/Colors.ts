@@ -4,13 +4,13 @@ export const Colors = {
     background: '#F8F8F6', // Warmer creamy beige
     tint: '#1DB8B5',
     icon: '#1C1C1E',
-    tabIconDefault: '#9BA1A6',
+    tabIconDefault: '#86868B',
     tabIconSelected: '#1DB8B5',
     card: '#FFFFFF',
     primary: '#1DB8B5',
     accent: '#E6B35A',
     border: '#EAEAEA', // Softer border
-    subtitle: '#8E8E93',
+    subtitle: '#6E6E73',
     quickActionBg: '#F0F0ED', // Specific for light mode buttons
   },
   dark: {

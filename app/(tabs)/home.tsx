@@ -1,110 +1,198 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, RefreshControl, SafeAreaView, TouchableOpacity, Image, ImageBackground, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, RefreshControl, SafeAreaView, TouchableOpacity, Image, ImageBackground, Alert, ActionSheetIOS, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { useTheme } from '@/context/ThemeContext';
 import { useAudio } from '@/context/AudioContext';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useTabBarAnimation } from '@/context/TabBarAnimationContext';
+import Animated from 'react-native-reanimated';
 import { fetchSurahs, Surah, getAudioUrl, QARIS, Qari } from '@/services/quranApi';
 import { FeaturedCard } from '@/components/FeaturedCard';
+import { FavoriteQariHero } from '@/components/FavoriteQariHero';
+import { ManageFavoriteQarisModal } from '@/components/ManageFavoriteQarisModal';
 import { SectionHeader } from '@/components/SectionHeader';
 import { QariAvatar } from '@/components/QariAvatar';
 import { SurahListItem } from '@/components/SurahListItem';
 import { BlurView } from 'expo-blur';
-import * as Location from 'expo-location';
+import { InsightsCard } from '@/components/InsightsCard';
+import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
+import { THEMED_PLAYLISTS } from '@/app/(tabs)/playlist';
+import { CityLocation, DEFAULT_CITY } from '@/constants/cities';
+import { calculatePrayerTimes, getSavedLocation, saveLocation, getDeviceGpsLocation, PrayerTimesData } from '@/services/prayerTimesService';
+import { LocationPickerModal } from '@/components/LocationPickerModal';
+import { useTranslation } from 'react-i18next';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BENTO_GAP = 12;
+const BENTO_CARD_WIDTH = (SCREEN_WIDTH - Spacing.pagePadding * 2 - BENTO_GAP) / 2;
 
 export default function HomeScreen() {
+    const { t } = useTranslation();
     const { theme } = useTheme();
     const router = useRouter();
-    const { playSurah, currentTrack, isPlaying, startSleepTimer, cancelSleepTimer, sleepTimerActive, position, duration } = useAudio();
+    const { playSurah, currentTrack, isPlaying, startSleepTimer, cancelSleepTimer, sleepTimerActive, position, duration, togglePlayPause, playNext } = useAudio();
+    const { favoriteQaris } = useFavorites();
+    const { scrollHandler } = useTabBarAnimation();
+
+    const PRAYER_LIST = [
+        { key: 'Fajr', name: t('home.prayerFajr', 'Subuh') },
+        { key: 'Dhuhr', name: t('home.prayerDhuhr', 'Dzuhur') },
+        { key: 'Asr', name: t('home.prayerAsr', 'Ashar') },
+        { key: 'Maghrib', name: t('home.prayerMaghrib', 'Maghrib') },
+        { key: 'Isha', name: t('home.prayerIsha', 'Isya') },
+    ];
+
+    const DEFAULT_BANNER_SURAH: Surah = {
+        number: 67,
+        name: 'سورة الملك',
+        englishName: 'Al-Mulk',
+        englishNameTranslation: 'The Sovereignty',
+        numberOfAyahs: 30,
+        revelationType: 'Meccan',
+    };
 
     const [surahs, setSurahs] = useState<Surah[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedQari, setSelectedQari] = useState<Qari>(QARIS[0]);
-    const [locationName, setLocationName] = useState('Memuat lokasi...');
+    const [currentLocation, setCurrentLocation] = useState<CityLocation>(DEFAULT_CITY);
+    const [isLocationModalVisible, setIsLocationModalVisible] = useState(false);
+    const [isGpsLoading, setIsGpsLoading] = useState(false);
+    const [isManageModalVisible, setIsManageModalVisible] = useState(false);
+    const [prayerData, setPrayerData] = useState<PrayerTimesData>(() =>
+        calculatePrayerTimes(DEFAULT_CITY.latitude, DEFAULT_CITY.longitude, new Date(), DEFAULT_CITY.name, DEFAULT_CITY.timezone)
+    );
 
-    const [prayerTimes, setPrayerTimes] = useState<any>(null);
-    const [nextPrayer, setNextPrayer] = useState<string | null>(null);
+    const [isPremiumModalVisible, setIsPremiumModalVisible] = useState(false);
 
-    // Logic for Featured Banner
-    let bannerSurah = surahs.find(s => s.number === 67); // Default Al-Mulk
-    let bannerQari = selectedQari;
+    // Filter favorite Qaris based on user preference
+    const favoriteQariList = QARIS.filter(q => favoriteQaris.includes(q.id));
+    const displayedFavoriteQaris = favoriteQariList.length > 0 ? favoriteQariList : QARIS.slice(0, 4);
 
-    if (currentTrack && surahs.length > 0) {
-        // If playing, find the current surah
-        const found = surahs.find(s => s.number === currentTrack.surahNumber);
-        if (found) {
-            bannerSurah = found;
+    // Hero qari: selected qari if in favorites, otherwise the first favorite
+    const heroQari = displayedFavoriteQaris.find(q => q.id === selectedQari.id) || displayedFavoriteQaris[0];
+
+    // New Qaris for the "Qari baru" section matching reference
+    const NEW_QARI_IDS = ['ali_hudhaify', 'ahmed_kaseb', 'khalil_al_saghir'];
+    const newQaris = QARIS.filter(q => NEW_QARI_IDS.includes(q.id));
+
+    // Tajwid Qaris for "Untuk tajwid" section
+    const tajwidQaris = QARIS.filter(q => q.specialty?.includes('tajwid'));
+
+    // Logic for Featured Banner (Lanjutkan Mendengarkan)
+    const activeBannerSurah =
+        (currentTrack && surahs.find(s => s.number === currentTrack.surahNumber)) ||
+        surahs.find(s => s.number === 67) ||
+        DEFAULT_BANNER_SURAH;
+
+    const activeBannerQari =
+        (currentTrack && QARIS.find(q => q.id === currentTrack.qariId)) ||
+        selectedQari ||
+        QARIS[0];
+
+    const isBannerPlaying = isPlaying && currentTrack?.surahNumber === activeBannerSurah.number;
+    const bannerPosition = currentTrack?.surahNumber === activeBannerSurah.number ? position : 0;
+    const bannerDuration = currentTrack?.surahNumber === activeBannerSurah.number ? duration : 0;
+
+    const handleToggleBannerPlay = () => {
+        if (currentTrack && currentTrack.surahNumber === activeBannerSurah.number) {
+            togglePlayPause();
+        } else {
+            const url = getAudioUrl(activeBannerQari.id, activeBannerSurah.number);
+            playSurah(url, {
+                surahName: activeBannerSurah.englishName,
+                qariName: activeBannerQari.name,
+                surahNumber: activeBannerSurah.number,
+                qariId: activeBannerQari.id,
+            });
         }
-        // Find the qari for the current track
-        const playingQari = QARIS.find(q => q.id === currentTrack.qariId);
-        if (playingQari) {
-            bannerQari = playingQari;
+    };
+
+    const handleBannerNext = () => {
+        if (currentTrack) {
+            playNext();
+        } else {
+            const nextNum = activeBannerSurah.number < 114 ? activeBannerSurah.number + 1 : 1;
+            const nextSurah = surahs.find(s => s.number === nextNum);
+            if (nextSurah) {
+                const url = getAudioUrl(activeBannerQari.id, nextSurah.number);
+                playSurah(url, {
+                    surahName: nextSurah.englishName,
+                    qariName: activeBannerQari.name,
+                    surahNumber: nextSurah.number,
+                    qariId: activeBannerQari.id,
+                });
+            }
         }
-    }
+    };
 
     // Recommendations (e.g. Kahf, Yasin, Waqiah)
     const recommendations = surahs.filter(s => [18, 36, 56].includes(s.number));
 
     useEffect(() => {
         loadData();
-        getLocation();
+        initLocationAndPrayers();
     }, []);
 
-    const getLocation = async () => {
-        try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setLocationName('Lokasi tidak diizinkan');
-                return;
+    // Periodic timer: update prayer status, countdown, and recalculate on midnight date change
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setPrayerData(calculatePrayerTimes(currentLocation.latitude, currentLocation.longitude, new Date(), currentLocation.name, currentLocation.timezone));
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [currentLocation]);
+
+    const initLocationAndPrayers = async () => {
+        const saved = await getSavedLocation();
+        setCurrentLocation(saved);
+        const initialTimes = calculatePrayerTimes(saved.latitude, saved.longitude, new Date(), saved.name, saved.timezone);
+        setPrayerData(initialTimes);
+
+        // If saved location is GPS or default, verify GPS silently
+        if (saved.id === 'gps_current' || saved.id === DEFAULT_CITY.id) {
+            try {
+                const res = await getDeviceGpsLocation();
+                if (res && res.location && !res.isSimulator) {
+                    setCurrentLocation(res.location);
+                    setPrayerData(calculatePrayerTimes(res.location.latitude, res.location.longitude, new Date(), res.location.name, res.location.timezone));
+                }
+            } catch (e) {
+                // Keep saved location
             }
-
-            let location = await Location.getCurrentPositionAsync({});
-            let address = await Location.reverseGeocodeAsync(location.coords);
-
-            if (address && address.length > 0) {
-                const { city, district, region } = address[0];
-                setLocationName(district || city || region || 'Lokasi ditemukan');
-            }
-
-            fetchPrayerTimes(location.coords.latitude, location.coords.longitude);
-        } catch (error) {
-            setLocationName('Gagal memuat lokasi');
         }
     };
 
-    const fetchPrayerTimes = async (lat: number, long: number) => {
-        try {
-            const date = Math.floor(Date.now() / 1000);
-            // Method 20 is Kemenag Indonesia
-            const response = await fetch(`https://api.aladhan.com/v1/timings/${date}?latitude=${lat}&longitude=${long}&method=20`);
-            const data = await response.json();
-            if (data.code === 200) {
-                setPrayerTimes(data.data.timings);
-                determineNextPrayer(data.data.timings);
-            }
-        } catch (error) {
-            console.error('Error fetching prayer times', error);
-        }
+    const handleSelectLocation = async (newLoc: CityLocation) => {
+        setCurrentLocation(newLoc);
+        await saveLocation(newLoc);
+        setPrayerData(calculatePrayerTimes(newLoc.latitude, newLoc.longitude, new Date(), newLoc.name, newLoc.timezone));
     };
 
-    const determineNextPrayer = (timings: any) => {
-        // Simple logic to find next prayer based on current time
-        const now = new Date();
-        const currentTime = now.getHours() * 60 + now.getMinutes();
-
-        const prayerOrder = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-        for (const prayer of prayerOrder) {
-            const [hours, minutes] = timings[prayer].split(':').map(Number);
-            const prayerTime = hours * 60 + minutes;
-            if (prayerTime > currentTime) {
-                setNextPrayer(prayer);
-                return;
+    const handleRequestGpsExplicit = async () => {
+        setIsGpsLoading(true);
+        try {
+            const res = await getDeviceGpsLocation();
+            if (res && res.location) {
+                setCurrentLocation(res.location);
+                setPrayerData(calculatePrayerTimes(res.location.latitude, res.location.longitude, new Date(), res.location.name, res.location.timezone));
+                if (res.isSimulator) {
+                    Alert.alert(
+                        'Simulator iOS Terdeteksi',
+                        'Simulator mendeteksi koordinat bawaan San Francisco. Lokasi otomatis diarahkan ke Jakarta Pusat agar jadwal sholat tetap akurat.',
+                        [{ text: 'OK' }]
+                    );
+                }
+            } else if (res?.error) {
+                Alert.alert('Lokasi GPS', res.error, [{ text: 'OK' }]);
             }
+        } finally {
+            setIsGpsLoading(false);
         }
-        setNextPrayer('Fajr'); // Next day
     };
 
     const loadData = async () => {
@@ -122,6 +210,27 @@ export default function HomeScreen() {
             surahNumber: surah.number,
             qariId: selectedQari.id,
         });
+    };
+
+    const handlePlayHero = () => {
+        const targetSurah = activeBannerSurah || surahs[0];
+        if (!targetSurah) return;
+        const url = getAudioUrl(heroQari.id, targetSurah.number);
+        playSurah(url, {
+            surahName: targetSurah.englishName,
+            qariName: heroQari.name,
+            surahNumber: targetSurah.number,
+            qariId: heroQari.id,
+        });
+        setSelectedQari(heroQari);
+    };
+
+    const handleContinueListening = () => {
+        if (currentTrack) {
+            togglePlayPause();
+        } else {
+            handlePlayHero();
+        }
     };
 
     const handleSleepTimer = () => {
@@ -149,7 +258,7 @@ export default function HomeScreen() {
                 },
                 (buttonIndex) => {
                     if (buttonIndex < 4) {
-                        startSleepTimer(values[buttonIndex]); // Fixed variable name
+                        startSleepTimer(values[buttonIndex]);
                         Alert.alert("Timer Diatur", `Audio akan berhenti dalam ${options[buttonIndex]}.`);
                     }
                 }
@@ -168,96 +277,332 @@ export default function HomeScreen() {
         }
     };
 
-    const QuickAction = ({ icon, label, onPress }: { icon: string, label: string, onPress: () => void }) => (
-        <TouchableOpacity style={styles.quickAction} onPress={onPress}>
-            <View style={[styles.quickActionIcon, { backgroundColor: Colors[theme].quickActionBg }]}>
-                {/* Custom handling for icons to match design style */}
-                <Ionicons
-                    name={icon as any}
-                    size={28}
-                    color={Colors[theme].tint}
-                />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: Colors[theme].subtitle }]}>{label}</Text>
-        </TouchableOpacity>
-    );
+    interface BentoCardProps {
+        icon: keyof typeof Ionicons.glyphMap;
+        title: string;
+        subtitle: string;
+        accentColor: string;
+        onPress: () => void;
+        isActive?: boolean;
+    }
 
-    const PrayerItem = ({ name, time, isNext }: { name: string, time: string, isNext: boolean }) => (
-        <View style={[styles.prayerItem, isNext && { backgroundColor: Colors[theme].tint, borderColor: Colors[theme].tint }]}>
-            <Text style={[styles.prayerName, { color: isNext ? '#FFF' : Colors[theme].subtitle }]}>{name}</Text>
-            <Text style={[styles.prayerTime, { color: isNext ? '#FFF' : Colors[theme].text }]}>{time}</Text>
-        </View>
-    );
+    const BentoCard = ({ icon, title, subtitle, accentColor, onPress, isActive }: BentoCardProps) => {
+        const isDark = theme === 'dark';
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.bentoCard,
+                    {
+                        backgroundColor: isDark ? '#141417' : '#FFFFFF',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                    },
+                    isActive && {
+                        borderColor: `${accentColor}60`,
+                    }
+                ]}
+                onPress={onPress}
+                activeOpacity={0.72}
+            >
+                <View style={styles.bentoCardTop}>
+                    <View style={[styles.bentoIconBadge, { backgroundColor: `${accentColor}18` }]}>
+                        <Ionicons name={icon} size={22} color={accentColor} />
+                    </View>
+                    {isActive ? (
+                        <View style={[styles.bentoActivePill, { backgroundColor: `${accentColor}22` }]}>
+                            <View style={[styles.bentoActiveDot, { backgroundColor: accentColor }]} />
+                            <Text style={[styles.bentoActiveText, { color: accentColor }]}>
+                                {t('home.sleepTimerActive', 'Aktif')}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.bentoChevronWrap}>
+                            <Ionicons
+                                name="chevron-forward"
+                                size={15}
+                                color={isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.28)'}
+                            />
+                        </View>
+                    )}
+                </View>
+                <View style={styles.bentoCardBottom}>
+                    <Text
+                        style={[
+                            styles.bentoTitle,
+                            { color: Colors[theme].text }
+                        ]}
+                        numberOfLines={1}
+                    >
+                        {title}
+                    </Text>
+                    <Text
+                        style={[
+                            styles.bentoSubtitle,
+                            { color: isActive ? accentColor : Colors[theme].subtitle }
+                        ]}
+                        numberOfLines={1}
+                    >
+                        {subtitle}
+                    </Text>
+                </View>
+            </TouchableOpacity>
+        );
+    };
+
+    const isDark = theme === 'dark';
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: Colors[theme].background }]}>
-            <ScrollView
+        <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#09090B' : '#F4F4F5' }]}>
+            <Animated.ScrollView
                 contentContainerStyle={styles.scrollContent}
+                onScroll={scrollHandler}
+                scrollEventThrottle={16}
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
             >
-                {/* Header */}
+                {/* Header: Location pin + Assalamu'alaikum + Settings gear */}
                 <View style={styles.header}>
-                    <View>
-                        <View style={styles.locationContainer}>
-                            <Ionicons name="location-outline" size={14} color={Colors[theme].subtitle} />
-                            <Text style={[styles.location, { color: Colors[theme].subtitle }]}> {locationName}</Text>
-                        </View>
-                        <Text style={[styles.greeting, { color: Colors[theme].text }]}>Assalamu’alaikum</Text>
+                    <View style={styles.headerLeft}>
+                        <TouchableOpacity
+                            style={styles.locationContainer}
+                            onPress={() => setIsLocationModalVisible(true)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons
+                                name="location-sharp"
+                                size={14}
+                                color="#10B981"
+                            />
+                            <Text style={[styles.location, { color: isDark ? 'rgba(255, 255, 255, 0.85)' : '#374151' }]}>
+                                {' '}{currentLocation.name}
+                            </Text>
+                            <Ionicons
+                                name="chevron-down"
+                                size={12}
+                                color={isDark ? 'rgba(255, 255, 255, 0.45)' : '#9CA3AF'}
+                                style={{ marginLeft: 3 }}
+                            />
+                        </TouchableOpacity>
+                        <Text style={[styles.greeting, { color: isDark ? '#FFFFFF' : '#18181B' }]}>
+                            {t('home.greeting', "Assalamu'alaikum")}
+                        </Text>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/settings')}>
-                        <Ionicons name="settings-outline" size={24} color={Colors[theme].text} />
+                    <TouchableOpacity
+                        style={styles.settingsIconButton}
+                        onPress={() => router.push('/(tabs)/settings')}
+                        activeOpacity={0.7}
+                        accessibilityLabel={t('tabs.settings', 'Pengaturan')}
+                    >
+                        <Ionicons
+                            name="settings-outline"
+                            size={25}
+                            color={isDark ? '#FFFFFF' : '#18181B'}
+                        />
                     </TouchableOpacity>
                 </View>
 
                 {/* Prayer Times Widget */}
-                {prayerTimes && (
+                {prayerData && (
                     <View style={styles.prayerSection}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.prayerList}>
-                            <PrayerItem name="Subuh" time={prayerTimes.Fajr} isNext={nextPrayer === 'Fajr'} />
-                            <PrayerItem name="Dzuhur" time={prayerTimes.Dhuhr} isNext={nextPrayer === 'Dhuhr'} />
-                            <PrayerItem name="Ashar" time={prayerTimes.Asr} isNext={nextPrayer === 'Asr'} />
-                            <PrayerItem name="Maghrib" time={prayerTimes.Maghrib} isNext={nextPrayer === 'Maghrib'} />
-                            <PrayerItem name="Isya" time={prayerTimes.Isha} isNext={nextPrayer === 'Isha'} />
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.prayerList}
+                        >
+                            {PRAYER_LIST.map((item) => {
+                                const isNext = prayerData.nextPrayer === item.key;
+                                const time = (prayerData as any)[item.key] || '00:00';
+                                if (isNext) {
+                                    return (
+                                        <View key={item.key} style={styles.activePrayerBadge}>
+                                            <Text style={styles.activePrayerName}>{item.name}</Text>
+                                            <Text style={styles.activePrayerTime}>{time}</Text>
+                                        </View>
+                                    );
+                                }
+                                return (
+                                    <View key={item.key} style={styles.inactivePrayerItem}>
+                                        <Text style={[styles.inactivePrayerName, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                            {item.name}
+                                        </Text>
+                                        <Text style={[styles.inactivePrayerTime, { color: isDark ? '#FFFFFF' : '#18181B' }]}>
+                                            {time}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
                         </ScrollView>
+                        {prayerData.countdownText ? (
+                            <TouchableOpacity
+                                style={styles.countdownRow}
+                                onPress={() => setIsLocationModalVisible(true)}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="time-outline" size={13} color="#10B981" />
+                                <Text style={[styles.countdownText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                    {prayerData.countdownText} • {prayerData.methodName}
+                                </Text>
+                            </TouchableOpacity>
+                        ) : null}
                     </View>
                 )}
 
-                {/* Featured Card */}
-                {bannerSurah && (
-                    <FeaturedCard
-                        surah={bannerSurah}
-                        qari={bannerQari}
-                        onPress={() => handlePlay(bannerSurah!)}
-                        isPlaying={isPlaying && currentTrack?.surahNumber === bannerSurah.number}
-                        position={currentTrack?.surahNumber === bannerSurah.number ? position : 0}
-                        duration={currentTrack?.surahNumber === bannerSurah.number ? duration : 0}
+                {/* Hero Card: Lanjutkan Mendengarkan (Placed directly BEFORE Daftar Putar) */}
+                <FeaturedCard
+                    surah={activeBannerSurah}
+                    qari={activeBannerQari}
+                    onPress={() => handlePlay(activeBannerSurah)}
+                    onPressPlay={handleToggleBannerPlay}
+                    onPressNext={handleBannerNext}
+                    isPlaying={isBannerPlaying}
+                    position={bannerPosition}
+                    duration={bannerDuration}
+                />
+
+                {/* Section: Akses Cepat (Bento Grid 2x2) */}
+                <SectionHeader title={t('home.quickAccess', 'Akses Cepat')} />
+                <View style={styles.bentoGrid}>
+                    <BentoCard
+                        icon="book"
+                        title={t('home.allSurahs', 'Semua Surah')}
+                        subtitle={t('home.allSurahsSubtitle', "114 Surah Al-Qur'an")}
+                        accentColor="#10B981"
+                        onPress={() => router.push('/all-surahs' as any)}
+                    />
+                    <BentoCard
+                        icon="heart"
+                        title={t('tabs.favorites', 'Favorit')}
+                        subtitle={t('home.favoritesSubtitle', 'Koleksi tersimpan')}
+                        accentColor="#F43F5E"
+                        onPress={() => router.push('/(tabs)/favorites' as any)}
+                    />
+                    <BentoCard
+                        icon="moon"
+                        title={t('home.sleepTimer', 'Timer Tidur')}
+                        subtitle={sleepTimerActive ? t('home.sleepTimerActive', 'Sedang berjalan') : t('home.sleepTimerAuto', 'Mati otomatis')}
+                        accentColor="#0EA5E9"
+                        onPress={handleSleepTimer}
+                        isActive={sleepTimerActive}
+                    />
+                    <BentoCard
+                        icon="musical-notes"
+                        title={t('tabs.playlist', 'Daftar Putar')}
+                        subtitle={t('home.playlistSubtitle', 'Tema & offline')}
+                        accentColor="#8B5CF6"
+                        onPress={() => router.push('/(tabs)/playlist' as any)}
+                    />
+                </View>
+
+                {/* Section: Daftar Putar */}
+                <SectionHeader
+                    title={t('home.themedPlaylists', 'Daftar Putar')}
+                    onPressMore={() => router.push('/(tabs)/playlist' as any)}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                    {THEMED_PLAYLISTS.map((pl) => (
+                        <TouchableOpacity
+                            key={pl.id}
+                            style={styles.playlistHomeCard}
+                            onPress={() => router.push('/(tabs)/playlist' as any)}
+                            activeOpacity={0.85}
+                        >
+                            <LinearGradient
+                                colors={pl.colors}
+                                style={styles.playlistCardGrad}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <View style={[styles.playlistIconBadge, { backgroundColor: `${pl.accentColor}25` }]}>
+                                    <Ionicons name={pl.icon} size={20} color={pl.accentColor} />
+                                </View>
+                                <Text style={styles.playlistCardTitle} numberOfLines={1}>{pl.title}</Text>
+                                <Text style={styles.playlistCardCount}>{pl.surahNumbers.length} Surah</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Hero: Dari favorit Anda */}
+                {heroQari && (
+                    <FavoriteQariHero
+                        qari={heroQari}
+                        onPressPlay={handlePlayHero}
+                        isPlaying={isPlaying && currentTrack?.qariId === heroQari.id}
                     />
                 )}
 
-                {/* Quick Actions */}
-                <View style={styles.quickActionsRow}>
-                    <QuickAction icon="book" label="Semua Surah" onPress={() => router.push('/all-surahs')} />
-                    <QuickAction icon="heart" label="Favorit" onPress={() => router.push('/(tabs)/favorites')} />
-                    <QuickAction icon="moon" label={sleepTimerActive ? "Timer Aktif" : "Timer Tidur"} onPress={handleSleepTimer} />
-                    <QuickAction icon="musical-notes" label="Playlist" onPress={() => router.push('/playlist')} />
-                </View>
+                {/* Section: Favorit Anda */}
+                <SectionHeader
+                    title={`⭐ ${t('home.yourFavorites', 'Favorit Anda')}`}
+                    onPressMore={() => setIsManageModalVisible(true)}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                    {displayedFavoriteQaris.map((qari) => (
+                        <QariAvatar
+                            key={qari.id}
+                            qari={qari}
+                            isSelected={selectedQari.id === qari.id}
+                            onPress={(q) => setSelectedQari(q)}
+                        />
+                    ))}
+                </ScrollView>
+
+                {/* Wawasan / Insights Card */}
+                <InsightsCard
+                    onPressContinue={handleContinueListening}
+                    onPressMore={() => router.push('/all-surahs' as any)}
+                />
+
+                {/* Section: Untuk tajwid */}
+                {tajwidQaris.length > 0 && (
+                    <>
+                        <SectionHeader
+                            title={t('home.forTajwid', 'Untuk tajwid')}
+                            onPressMore={() => router.push('/(tabs)/qari' as any)}
+                        />
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                            {tajwidQaris.map((qari) => (
+                                <QariAvatar
+                                    key={qari.id}
+                                    qari={qari}
+                                    isSelected={selectedQari.id === qari.id}
+                                    onPress={(q) => setSelectedQari(q)}
+                                />
+                            ))}
+                        </ScrollView>
+                    </>
+                )}
+
+                {/* Section: Qari Baru */}
+                <SectionHeader
+                    title={t('home.newQaris', 'Qari baru')}
+                    onPressMore={() => setIsManageModalVisible(true)}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                    {newQaris.map((qari) => (
+                        <QariAvatar
+                            key={qari.id}
+                            qari={qari}
+                            badge="BARU"
+                            isSelected={selectedQari.id === qari.id}
+                            onPress={(q) => setSelectedQari(q)}
+                        />
+                    ))}
+                </ScrollView>
+
+
 
                 {/* Recommendations */}
-                <View style={styles.sectionHeaderContainer}>
-                    <SectionHeader title="Rekomendasi untuk Anda" />
-                </View>
+                <SectionHeader title="Rekomendasi untuk Anda" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
                     {recommendations.map((surah) => (
-                        <View key={surah.number} style={{ width: 280, marginRight: 16 }}>
-                            {/* Update SurahListItem visual if needed, for now standard is okay but maybe needs background image */}
+                        <View key={surah.number} style={{ width: 280, marginRight: Spacing.lg }}>
                             <ImageBackground
-                                source={require('@/assets/images/banner_bg.png')}
-                                style={{ borderRadius: 16, overflow: 'hidden' }}
-                                imageStyle={{ opacity: 0.6 }} // Dim background
+                                source={require('@/assets/images/Masjid.jpg')}
+                                style={{ borderRadius: Spacing.lg, overflow: 'hidden' }}
+                                imageStyle={{ opacity: 0.6 }}
                             >
                                 <LinearGradient
                                     colors={theme === 'dark' ? ['rgba(15, 28, 27, 0.9)', 'rgba(15, 28, 27, 0.7)'] : ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)']}
-                                    style={{ padding: 4 }}
+                                    style={{ padding: Spacing.xs }}
                                 >
                                     <SurahListItem
                                         surah={surah}
@@ -269,23 +614,31 @@ export default function HomeScreen() {
                     ))}
                 </ScrollView>
 
-                {/* Qari Selection */}
-                <View style={[styles.sectionHeaderContainer, { marginTop: 8 }]}>
-                    <SectionHeader title="Qari Pilihan" />
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-                    {QARIS.map((qari) => (
-                        <QariAvatar
-                            key={qari.id}
-                            qari={qari}
-                            isSelected={selectedQari.id === qari.id}
-                            onPress={setSelectedQari}
-                        />
-                    ))}
-                </ScrollView>
+                {/* Modal to manage favorite Qaris */}
+                <ManageFavoriteQarisModal
+                    visible={isManageModalVisible}
+                    onClose={() => setIsManageModalVisible(false)}
+                    onSelectQari={(q) => setSelectedQari(q)}
+                />
 
-                <View style={{ height: 100 }} />
-            </ScrollView>
+                {/* Modal for Premium Paywall */}
+                <PremiumPaywallModal
+                    visible={isPremiumModalVisible}
+                    onClose={() => setIsPremiumModalVisible(false)}
+                />
+
+                {/* Modal for Picking City & GPS Location */}
+                <LocationPickerModal
+                    visible={isLocationModalVisible}
+                    onClose={() => setIsLocationModalVisible(false)}
+                    currentLocation={currentLocation}
+                    onSelectLocation={handleSelectLocation}
+                    onRequestGps={handleRequestGpsExplicit}
+                    isGpsLoading={isGpsLoading}
+                />
+
+                <View style={{ height: 230 }} />
+            </Animated.ScrollView>
         </SafeAreaView>
     );
 }
@@ -295,14 +648,18 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     scrollContent: {
-        paddingTop: 20,
+        paddingTop: Spacing.md,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 24, // Increased padding
-        marginBottom: 24,
+        alignItems: 'flex-end',
+        paddingHorizontal: Spacing.pagePadding,
+        marginBottom: Spacing.lg + 4,
+        paddingTop: Spacing.xs,
+    },
+    headerLeft: {
+        flex: 1,
     },
     locationContainer: {
         flexDirection: 'row',
@@ -310,69 +667,197 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     location: {
-        fontSize: 13, // Slightly larger
+        fontSize: Typography.size.footnote,
+        fontWeight: Typography.weight.medium,
+        fontFamily: Typography.fontFamily.text,
     },
     greeting: {
-        fontSize: 22, // Refined size
-        fontWeight: '500', // Lighter weight like Apple Design
-        letterSpacing: -0.5,
+        fontSize: Typography.size.largeTitle,
+        fontWeight: Typography.weight.bold,
+        fontFamily: Typography.fontFamily.display,
+        letterSpacing: Typography.tracking.tight,
     },
-    quickActionsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        marginBottom: 12,
-        gap: 12,
-    },
-    quickAction: {
-        alignItems: 'center',
-        flex: 1, // Distribute evenly
-    },
-    quickActionIcon: {
-        width: 60, // Larger
-        height: 60,
-        borderRadius: 20, // Softer radius
+    settingsIconButton: {
+        width: 44,
+        height: 44,
         justifyContent: 'center',
+        alignItems: 'flex-end',
+        marginBottom: 2,
+    },
+    bentoGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: Spacing.pagePadding,
+        gap: BENTO_GAP,
+        marginTop: Spacing.xs,
+        marginBottom: Spacing.lg,
+    },
+    bentoCard: {
+        width: BENTO_CARD_WIDTH,
+        height: 114,
+        borderRadius: 20,
+        padding: 14,
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    bentoCardTop: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
-        // Removed shadow for flatter aesthetic or kept subtle
+        justifyContent: 'space-between',
     },
-    quickActionLabel: {
+    bentoIconBadge: {
+        width: 42,
+        height: 42,
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    bentoChevronWrap: {
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    bentoActivePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        gap: 5,
+    },
+    bentoActiveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    bentoActiveText: {
+        fontSize: 10,
+        fontWeight: Typography.weight.bold,
+        fontFamily: Typography.fontFamily.primary,
+        letterSpacing: 0.3,
+    },
+    bentoCardBottom: {
+        marginTop: 6,
+    },
+    bentoTitle: {
+        fontSize: 15,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.display,
+        letterSpacing: -0.2,
+    },
+    bentoSubtitle: {
         fontSize: 12,
-        textAlign: 'center',
-        fontWeight: '500',
-    },
-    sectionHeaderContainer: {
-        paddingHorizontal: 4, // Header handles its own padding usually but let's align
+        fontWeight: Typography.weight.regular,
+        fontFamily: Typography.fontFamily.text,
+        marginTop: 2,
     },
     horizontalScroll: {
-        paddingHorizontal: 24,
-        paddingBottom: 8,
+        paddingHorizontal: Spacing.pagePadding,
+        paddingBottom: Spacing.sm,
+    },
+    playlistHomeCard: {
+        width: 140,
+        height: 120,
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginRight: Spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    playlistCardGrad: {
+        flex: 1,
+        padding: Spacing.md,
+        justifyContent: 'space-between',
+    },
+    playlistIconBadge: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    playlistCardTitle: {
+        fontSize: Typography.size.subhead,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.text,
+        color: '#FFFFFF',
+    },
+    playlistCardCount: {
+        fontSize: Typography.size.caption2,
+        color: 'rgba(255, 255, 255, 0.65)',
+        fontWeight: Typography.weight.medium,
+        fontFamily: Typography.fontFamily.primary,
+        fontVariant: ['tabular-nums'],
     },
     prayerSection: {
-        marginBottom: 24,
+        marginBottom: Spacing.xl,
     },
     prayerList: {
-        paddingHorizontal: 24,
+        paddingHorizontal: Spacing.pagePadding,
+        alignItems: 'center',
+        gap: 18,
     },
-    prayerItem: {
+    activePrayerBadge: {
+        backgroundColor: '#1DB8B5',
+        borderRadius: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 16,
-        marginRight: 10,
-        backgroundColor: 'rgba(0,0,0,0.03)', // subtle background
-        borderWidth: 1,
-        borderColor: 'transparent',
+        minWidth: 76,
+        shadowColor: '#1DB8B5',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    prayerName: {
-        fontSize: 11,
-        fontWeight: '500',
+    activePrayerName: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.text,
+        marginBottom: 2,
+    },
+    activePrayerTime: {
+        color: '#FFFFFF',
+        fontSize: 17,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    inactivePrayerItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+    },
+    inactivePrayerName: {
+        fontSize: 13,
+        fontWeight: Typography.weight.medium,
+        fontFamily: Typography.fontFamily.text,
         marginBottom: 4,
     },
-    prayerTime: {
-        fontSize: 14,
-        fontWeight: '700',
+    inactivePrayerTime: {
+        fontSize: 17,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    countdownRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: Spacing.pagePadding,
+        marginTop: 10,
+        gap: 5,
+    },
+    countdownText: {
+        fontSize: 12,
+        fontWeight: '500',
     },
 });

@@ -1,0 +1,7 @@
+{
+  "name": "widget-bridge",
+  "platforms": ["ios"],
+  "ios": {
+    "modules": ["WidgetBridgeModule"]
+  }
+}

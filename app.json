@@ -1,30 +1,58 @@
 {
   "expo": {
-    "name": "quran-audio",
-    "slug": "quran-audio",
+    "name": "QuranFlow",
+    "slug": "quranflow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "quranaudio",
+    "scheme": "quranflow",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+    "locales": {
+      "id": "./locales/id.json",
+      "en": "./locales/en.json",
+      "ar": "./locales/ar.json"
     },
     "ios": {
+      "appleTeamId": "3R6F2T6RSZ",
       "supportsTablet": true,
-      "bundleIdentifier": "com.antigravity.quranaudio"
+      "bundleIdentifier": "com.lunaris.quranflow",
+      "buildNumber": "3",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.lunaris.quranflow"
+        ]
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "QuranFlow memerlukan izin lokasi untuk menghitung jadwal sholat dan waktu azan yang akurat sesuai lokasi Anda.",
+        "CFBundleLocalizations": [
+          "id",
+          "en",
+          "ar"
+        ],
+        "CFBundleDevelopmentRegion": "id",
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#009DA6"
       },
-      "package": "com.antigravity.quranaudio",
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.lunaris.quranflow",
+      "versionCode": 1,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,10 +61,66 @@
     },
     "plugins": [
       "expo-router",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#0B1615"
+          }
+        }
+      ],
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-audio",
+      "expo-video",
+      "expo-localization",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "QuranFlow memerlukan izin lokasi untuk menghitung jadwal sholat dan waktu azan yang akurat sesuai lokasi Anda."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#1DB8B5"
+        }
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.lunaris.quranflow.QuranAudioWidget",
+                  "targetName": "QuranAudioWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.lunaris.quranflow"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "51941623-55e4-4e55-830b-dd15c2069097"
+      }
+    },
+    "owner": "lunaris.dev"
   }
 }

@@ -1,44 +1,63 @@
+import { CustomBottomTabBar } from '@/components/CustomBottomTabBar';
 import { MiniPlayer } from '@/components/MiniPlayer';
-import { Colors } from '@/constants/Colors';
-import { useTheme } from '@/context/ThemeContext';
+import { AdBannerComponent } from '@/components/AdBannerComponent';
+import { TabBarAnimationProvider } from '@/context/TabBarAnimationContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
-  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const bannerBottom = Math.max(insets.bottom, 12) + 64 + 6;
 
   return (
-    <>
+    <TabBarAnimationProvider>
       <Tabs
+        tabBar={(props) => <CustomBottomTabBar {...props} />}
         screenOptions={{
-          tabBarActiveTintColor: Colors[theme].tint,
-          tabBarInactiveTintColor: Colors[theme].tabIconDefault,
-          tabBarStyle: {
-            backgroundColor: Colors[theme].background,
-            borderTopColor: Colors[theme].border,
-          },
           headerShown: false,
-        }}>
+        }}
+      >
         <Tabs.Screen
           name="home"
           options={{
-            title: 'Home',
-            tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+            title: t('tabs.home', 'Beranda'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="qari"
+          options={{
+            title: t('tabs.qari', 'Qari'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="mic-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="playlist"
+          options={{
+            title: t('tabs.playlist', 'Daftar Putar'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: t('tabs.settings', 'Pengaturan'),
+            tabBarIcon: ({ color, size }) => <Ionicons name="settings-sharp" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="favorites"
           options={{
-            title: 'Favorit',
-            tabBarIcon: ({ color }) => <Ionicons name="heart" size={24} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
           name="foryou"
           options={{
-            title: 'Untukmu',
-            tabBarIcon: ({ color }) => <Ionicons name="compass" size={24} color={color} />,
+            href: null,
           }}
         />
         <Tabs.Screen
@@ -47,15 +66,9 @@ export default function TabLayout() {
             href: null,
           }}
         />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: 'Pengaturan',
-            tabBarIcon: ({ color }) => <Ionicons name="settings-sharp" size={24} color={color} />,
-          }}
-        />
       </Tabs>
+      <AdBannerComponent bottomOffset={bannerBottom} />
       <MiniPlayer />
-    </>
+    </TabBarAnimationProvider>
   );
 }

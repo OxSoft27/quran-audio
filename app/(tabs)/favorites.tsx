@@ -3,6 +3,8 @@ import { StyleSheet, View, Text, FlatList, SafeAreaView, Image } from 'react-nat
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { useTheme } from '@/context/ThemeContext';
 import { useAudio } from '@/context/AudioContext';
 import { SurahListItem } from '@/components/SurahListItem';
@@ -82,23 +84,22 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        padding: 20,
+        padding: Spacing.pagePadding,
     },
     title: {
-        fontSize: 28,
-        fontWeight: '700',
+        ...Typography.preset.title1,
     },
     listContent: {
-        paddingBottom: 100,
+        paddingBottom: Spacing['8xl'],
     },
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingBottom: 100,
+        paddingBottom: Spacing['8xl'],
     },
     emptyText: {
-        marginTop: 16,
-        fontSize: 16,
+        marginTop: Spacing.lg,
+        fontSize: Typography.size.body,
     },
 });

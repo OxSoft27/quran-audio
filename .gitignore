@@ -39,3 +39,17 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# ambient backup
+assets/audio/ambient_original/
+assets/videos/raw_originals/
+
+# temp & media
+*.MP4
+*.mp4
+*.certSigningRequest
+/test_*.jpg
+/Masjid.jpg
+referensi/
+assets/images/qaris_backup*/
+

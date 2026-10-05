@@ -1,0 +1,9 @@
+/** @type {import('@bacons/apple-targets').Config} */
+module.exports = {
+  type: 'widget',
+  name: 'QuranAudioWidget',
+  bundleIdentifier: 'com.lunaris.quranflow.QuranAudioWidget',
+  entitlements: {
+    'com.apple.security.application-groups': ['group.com.lunaris.quranflow'],
+  },
+};

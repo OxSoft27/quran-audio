@@ -1,16 +1,32 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
+import { Typography } from '@/constants/Typography';
+import { Spacing } from '@/constants/Spacing';
 import { useTheme } from '@/context/ThemeContext';
 import { useAudio } from '@/context/AudioContext';
+import { useTabBarAnimation } from '@/context/TabBarAnimationContext';
+import { QARIS } from '@/services/quranApi';
 import { useRouter } from 'expo-router';
+import { useSubscription } from '@/context/SubscriptionContext';
 
-export const MiniPlayer = () => {
+export interface MiniPlayerProps {
+    hasTabBar?: boolean;
+    bottomOffset?: number;
+}
+
+export const MiniPlayer: React.FC<MiniPlayerProps> = ({ hasTabBar = true, bottomOffset }) => {
     const { theme } = useTheme();
-    const { currentTrack, isPlaying, togglePlayPause, position, duration } = useAudio();
+    const isDark = theme === 'dark';
+    const insets = useSafeAreaInsets();
+    const { currentTrack, isPlaying, togglePlayPause, playNext, position, duration } = useAudio();
+    const { miniPlayerAnimatedStyle } = useTabBarAnimation();
     const router = useRouter();
+    const { isPremium } = useSubscription();
 
     if (!currentTrack) return null;
 
@@ -20,94 +36,209 @@ export const MiniPlayer = () => {
         router.push('/player/fullscreen');
     };
 
-    const Container = Platform.OS === 'ios' ? BlurView : View;
-    const containerProps = Platform.OS === 'ios'
-        ? { intensity: 80, tint: theme, style: styles.container }
-        : { style: [styles.container, { backgroundColor: Colors[theme].card }] };
+    // Find the qari artwork
+    const qari = QARIS.find(q => q.id === currentTrack.qariId);
+    const artworkSource = qari?.image || require('@/assets/images/qaris/mishary.png');
+
+    // Floating position:
+    // With tab bar: CustomBottomTabBar is at Math.max(insets.bottom, 12) with height 64 + 10px margin.
+    // If not premium, float smoothly above the ad banner (56px)
+    const adOffset = !isPremium && hasTabBar ? 56 : 0;
+    const defaultBottom = hasTabBar
+        ? Math.max(insets.bottom, 12) + 64 + 10 + adOffset
+        : Math.max(insets.bottom, 14);
+
+    const bottomPosition = bottomOffset !== undefined ? bottomOffset : defaultBottom;
 
     return (
-        <TouchableOpacity onPress={handlePress} activeOpacity={0.9} style={styles.wrapper}>
-            {/* @ts-ignore */}
-            <Container {...containerProps}>
-                <View style={styles.content}>
-                    <View style={[styles.iconContainer, { backgroundColor: Colors[theme].background }]}>
-                        <Ionicons name="musical-note" size={20} color={Colors[theme].tint} />
+        <Animated.View style={[
+            styles.wrapper,
+            {
+                bottom: bottomPosition,
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.08)',
+                shadowOpacity: isDark ? 0.35 : 0.1,
+            },
+            hasTabBar ? miniPlayerAnimatedStyle : undefined,
+        ]}>
+            <TouchableOpacity onPress={handlePress} activeOpacity={0.92} style={styles.touchable}>
+                <BlurView
+                    intensity={isDark ? 75 : 90}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={[
+                        styles.blurContainer,
+                        { backgroundColor: isDark ? 'rgba(20, 20, 22, 0.55)' : 'rgba(255, 255, 255, 0.82)' },
+                    ]}
+                >
+                    <View style={styles.content}>
+                        {/* Artwork Avatar */}
+                        <View style={styles.artworkContainer}>
+                            <Image
+                                source={artworkSource}
+                                style={styles.artwork}
+                                resizeMode="cover"
+                            />
+                        </View>
+
+                        {/* Title & Reciter */}
+                        <View style={styles.textContainer}>
+                            <Text
+                                style={[
+                                    styles.title,
+                                    { color: isDark ? '#FFFFFF' : '#111827' },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {currentTrack.surahNumber ? `${currentTrack.surahNumber}. ${currentTrack.surahName}` : currentTrack.surahName}
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.subtitle,
+                                    { color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.55)' },
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {currentTrack.qariName}
+                            </Text>
+                        </View>
+
+                        {/* Controls */}
+                        <View style={styles.controlsContainer}>
+                            <TouchableOpacity
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    togglePlayPause();
+                                }}
+                                style={styles.controlButton}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name={isPlaying ? "pause" : "play"}
+                                    size={20}
+                                    color={isDark ? "#FFFFFF" : "#111827"}
+                                />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    playNext();
+                                }}
+                                style={styles.controlButton}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="play-skip-forward"
+                                    size={18}
+                                    color={isDark ? "#FFFFFF" : "#111827"}
+                                />
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
-                    <View style={styles.textContainer}>
-                        <Text style={[styles.title, { color: Colors[theme].text }]} numberOfLines={1}>
-                            {currentTrack.surahName}
-                        </Text>
-                        <Text style={[styles.subtitle, { color: Colors[theme].subtitle }]} numberOfLines={1}>
-                            {currentTrack.qariName}
-                        </Text>
+                    {/* Thin Progress Bar */}
+                    <View style={[styles.progressBar, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)' }]}>
+                        <View
+                            style={[
+                                styles.progressFill,
+                                {
+                                    width: `${progress * 100}%`,
+                                    backgroundColor: isDark ? '#FFFFFF' : '#10B981',
+                                }
+                            ]}
+                        />
                     </View>
-
-                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); togglePlayPause(); }} style={styles.playButton}>
-                        <Ionicons name={isPlaying ? "pause" : "play"} size={24} color={Colors[theme].text} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Progress Bar */}
-                <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: Colors[theme].tint }]} />
-                </View>
-            </Container>
-        </TouchableOpacity>
+                </BlurView>
+            </TouchableOpacity>
+        </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
     wrapper: {
         position: 'absolute',
-        bottom: 84, // Above tab bar
-        left: 10,
-        right: 10,
-        borderRadius: 16,
+        left: 14,
+        right: 14,
+        height: 64,
+        borderRadius: 32,
+        borderWidth: 0.5,
+        borderColor: 'rgba(255, 255, 255, 0.18)',
         overflow: 'hidden',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 8,
+        zIndex: 60,
     },
-    container: {
-        padding: 12,
+    touchable: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 32,
+        overflow: 'hidden',
+    },
+    blurContainer: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 32,
+        overflow: 'hidden',
+        justifyContent: 'center',
     },
     content: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 8,
+        paddingHorizontal: 12,
     },
-    iconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 8,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
+    artworkContainer: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        overflow: 'hidden',
+        backgroundColor: '#2A2A2A',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        marginRight: 10,
+    },
+    artwork: {
+        width: '100%',
+        height: '100%',
     },
     textContainer: {
         flex: 1,
+        justifyContent: 'center',
+        marginRight: 4,
     },
     title: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: Typography.size.footnote,
+        fontWeight: Typography.weight.semibold,
+        fontFamily: Typography.fontFamily.text,
+        letterSpacing: Typography.tracking.subhead,
     },
     subtitle: {
-        fontSize: 12,
+        fontSize: Typography.size.caption2,
+        fontWeight: Typography.weight.regular,
+        fontFamily: Typography.fontFamily.text,
+        marginTop: 1,
     },
-    playButton: {
-        padding: 8,
+    controlsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    controlButton: {
+        padding: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     progressBar: {
-        height: 3,
-        backgroundColor: 'rgba(128,128,128,0.2)',
-        borderRadius: 1.5,
-        width: '100%',
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 2.5,
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
     },
     progressFill: {
         height: '100%',
-        borderRadius: 1.5,
     },
 });
