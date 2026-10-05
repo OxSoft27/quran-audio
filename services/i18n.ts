@@ -24,13 +24,17 @@ export type SupportedLanguageCode = 'id' | 'en' | 'ar';
 export const getDeviceLanguage = (): SupportedLanguageCode => {
     try {
         const locales = Localization.getLocales();
-        const code = locales && locales.length > 0 ? locales[0].languageCode : null;
-        if (code === 'en' || code === 'ar' || code === 'id') {
-            return code;
+        const code = locales && locales.length > 0 ? locales[0].languageCode?.toLowerCase() : null;
+        if (code === 'id' || code === 'in') {
+            return 'id';
         }
-        return 'id';
+        if (code === 'ar') {
+            return 'ar';
+        }
+        // International fallback for all global users
+        return 'en';
     } catch {
-        return 'id';
+        return 'en';
     }
 };
 
@@ -47,7 +51,7 @@ i18n
         compatibilityJSON: 'v4',
         resources,
         lng: getDeviceLanguage(),
-        fallbackLng: 'id',
+        fallbackLng: 'en',
         interpolation: {
             escapeValue: false,
         },

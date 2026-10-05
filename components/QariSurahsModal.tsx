@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
+import { useSubscription } from '@/context/SubscriptionContext';
+import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
 import {
     ActivityIndicator,
     Alert,
@@ -47,6 +49,8 @@ export const QariSurahsModal: React.FC<QariSurahsModalProps> = ({
         isBatchDownloading,
         batchProgress,
     } = useDownload();
+    const { isPremium } = useSubscription();
+    const [isPremiumModalVisible, setIsPremiumModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
     const surahs = useMemo(() => {
@@ -110,12 +114,22 @@ export const QariSurahsModal: React.FC<QariSurahsModalProps> = ({
                 ]
             );
         } else {
+            if (!isPremium) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setIsPremiumModalVisible(true);
+                return;
+            }
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             await downloadSurah(qari, item);
         }
     };
 
     const handleBatchDownload = () => {
+        if (!isPremium) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setIsPremiumModalVisible(true);
+            return;
+        }
         if (allDownloaded) {
             Alert.alert('Sudah Terunduh', `Semua surah untuk ${qari.name} sudah tersedia secara offline.`);
             return;
@@ -189,12 +203,12 @@ export const QariSurahsModal: React.FC<QariSurahsModalProps> = ({
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons
-                                        name={allDownloaded ? "checkmark-circle" : "cloud-download-outline"}
+                                        name={allDownloaded ? "checkmark-circle" : !isPremium ? "lock-closed-outline" : "cloud-download-outline"}
                                         size={13}
-                                        color={allDownloaded ? "#10B981" : "#38BDF8"}
+                                        color={allDownloaded ? "#10B981" : !isPremium ? "#F59E0B" : "#38BDF8"}
                                     />
-                                    <Text style={[styles.batchDownloadText, allDownloaded && styles.batchDownloadTextDone]}>
-                                        {allDownloaded ? "Offline Ready" : "Unduh Semua"}
+                                    <Text style={[styles.batchDownloadText, allDownloaded && styles.batchDownloadTextDone, !isPremium && !allDownloaded && { color: '#F59E0B' }]}>
+                                        {allDownloaded ? "Offline Ready" : !isPremium ? "Unduh Semua (PRO)" : "Unduh Semua"}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -364,6 +378,8 @@ export const QariSurahsModal: React.FC<QariSurahsModalProps> = ({
                                                 </View>
                                             ) : downloaded ? (
                                                 <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                                            ) : !isPremium ? (
+                                                <Ionicons name="lock-closed-outline" size={18} color="#F59E0B" />
                                             ) : (
                                                 <Ionicons name="arrow-down-circle-outline" size={22} color="rgba(255, 255, 255, 0.45)" />
                                             )}
@@ -394,6 +410,10 @@ export const QariSurahsModal: React.FC<QariSurahsModalProps> = ({
                     />
                 </BlurView>
             </View>
+            <PremiumPaywallModal
+                visible={isPremiumModalVisible}
+                onClose={() => setIsPremiumModalVisible(false)}
+            />
         </Modal>
     );
 };

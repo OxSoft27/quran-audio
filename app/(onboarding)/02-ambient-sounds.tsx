@@ -4,9 +4,13 @@ import { useRouter } from 'expo-router';
 import { Typography } from '@/constants/Typography';
 import { Spacing } from '@/constants/Spacing';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSubscription } from '@/context/SubscriptionContext';
+import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
 
 const SOUNDS = [
   {
@@ -48,14 +52,19 @@ const SOUNDS = [
 
 export default function AmbientSoundsScreen() {
   const router = useRouter();
+  const { isPremium } = useSubscription();
   const [selectedSound, setSelectedSound] = useState<string>('rain');
+  const [isPremiumModalVisible, setIsPremiumModalVisible] = useState(false);
 
   const currentSound = SOUNDS.find(s => s.id === selectedSound) || SOUNDS[1];
 
   // Native expo-video player for dynamic background video
   const videoPlayer = useVideoPlayer(currentSound.video, (p) => {
+    if (!p) return;
     p.loop = true;
     p.muted = true;
+    p.showNowPlayingNotification = false;
+    p.staysActiveInBackground = false;
     p.play();
   });
 
@@ -95,6 +104,17 @@ export default function AmbientSoundsScreen() {
     };
   }, []);
 
+  const handleSelectSound = (soundId: string) => {
+    // Only 'rain' is accessible for free users
+    if (soundId !== 'rain' && !isPremium) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setIsPremiumModalVisible(true);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedSound(soundId);
+  };
+
   const handleContinue = async () => {
     try {
       if (audioPlayer) audioPlayer.pause();
@@ -118,20 +138,21 @@ export default function AmbientSoundsScreen() {
         />
       )}
 
-      {/* Dark tint overlay for maximum contrast and legibility */}
+      {/* Dark Overlay for content legibility */}
       <View style={styles.overlay}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.content}>
             <View style={styles.header}>
-              <Text style={styles.title}>Suara latar</Text>
+              <Text style={styles.title}>Atmosfer Tilawah</Text>
               <Text style={styles.subtitle}>
-                Ketuk ikon untuk mendengarkan suara
+                Pilih suara latar untuk menemani tilawah Anda agar lebih khusyuk.
               </Text>
             </View>
 
             <View style={styles.soundsGrid}>
               {SOUNDS.map(sound => {
                 const isSelected = selectedSound === sound.id;
+                const isLocked = sound.id !== 'rain' && !isPremium;
                 return (
                   <TouchableOpacity
                     key={sound.id}
@@ -139,13 +160,18 @@ export default function AmbientSoundsScreen() {
                       styles.soundItem,
                       isSelected ? styles.soundItemSelected : styles.soundItemUnselected
                     ]}
-                    onPress={() => setSelectedSound(sound.id)}
+                    onPress={() => handleSelectSound(sound.id)}
                     activeOpacity={0.7}
                   >
+                    {isLocked && (
+                      <View style={styles.lockBadge}>
+                        <Ionicons name="lock-closed" size={12} color="#F59E0B" />
+                      </View>
+                    )}
                     <FontAwesome5 
                       name={sound.icon} 
                       size={32} 
-                      color={isSelected ? '#FFFFFF' : '#FFFFFF'} 
+                      color={isLocked ? 'rgba(255, 255, 255, 0.65)' : '#FFFFFF'} 
                     />
                   </TouchableOpacity>
                 );
@@ -164,6 +190,12 @@ export default function AmbientSoundsScreen() {
           </View>
         </SafeAreaView>
       </View>
+
+      {/* Premium Paywall Modal for locked sounds */}
+      <PremiumPaywallModal
+        visible={isPremiumModalVisible}
+        onClose={() => setIsPremiumModalVisible(false)}
+      />
     </View>
   );
 }
@@ -214,6 +246,19 @@ const styles = StyleSheet.create({
     borderRadius: 38,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  lockBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+    zIndex: 10,
   },
   soundItemSelected: {
     backgroundColor: '#1DB8B5',

@@ -9,6 +9,7 @@ export interface Surah {
 }
 
 import { ALL_SURAHS, SurahItem } from '@/constants/surahsData';
+import i18n, { getDeviceLanguage } from './i18n';
 
 export interface Qari {
     id: string;
@@ -261,15 +262,60 @@ export const fetchSurahs = async (): Promise<Surah[]> => {
     }
 };
 
-export const fetchSurahText = async (surahNumber: number): Promise<{ arabic: Ayah[], translation: Ayah[] }> => {
+/**
+ * Official authoritative Quran translations mapped from device/app language codes.
+ * Default fallback is 'en.sahih' (Saheeh International) for global users.
+ */
+export const TRANSLATION_EDITIONS: Record<string, string> = {
+    id: 'id.indonesian', // Kementerian Agama RI
+    in: 'id.indonesian', // Indonesian legacy code
+    en: 'en.sahih',      // Saheeh International (Worldwide English standard)
+    ar: 'ar.jalalayn',   // Tafsir Al-Jalalayn
+    fr: 'fr.hamidullah', // Muhammad Hamidullah (French)
+    es: 'es.cortes',     // Julio Cortes (Spanish)
+    tr: 'tr.diyanet',    // Diyanet Isleri (Turkish)
+    de: 'de.aburida',    // Abu Rida (German)
+    ru: 'ru.kuliev',     // Elmir Kuliev (Russian)
+    ur: 'ur.jalandhry',  // Fateh Muhammad Jalandhry (Urdu)
+    ms: 'ms.basmeih',    // Abdullah Muhammad Basmeih (Malay)
+    zh: 'zh.jian',       // Ma Jian (Chinese)
+    ja: 'ja.japanese',   // Ryoichi Mita (Japanese)
+    bn: 'bn.bengali',    // Muhiuddin Khan (Bengali)
+    hi: 'hi.hindi',      // Suhel Farooq Khan (Hindi)
+};
+
+/**
+ * Resolves the translation edition identifier from a language code or device locale
+ */
+export const getTranslationEdition = (langCode?: string): string => {
+    const raw = (langCode || i18n?.language || getDeviceLanguage() || 'en').toLowerCase();
+    const clean = raw.split(/[-_]/)[0];
+    return TRANSLATION_EDITIONS[clean] || 'en.sahih';
+};
+
+// In-memory cache for fast lyrics loading & smooth language switching
+const surahTextCache = new Map<string, { arabic: Ayah[]; translation: Ayah[] }>();
+
+export const fetchSurahText = async (
+    surahNumber: number,
+    langCode?: string
+): Promise<{ arabic: Ayah[]; translation: Ayah[] }> => {
     try {
-        const response = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,id.indonesian`);
+        const edition = getTranslationEdition(langCode);
+        const cacheKey = `${surahNumber}_${edition}`;
+        if (surahTextCache.has(cacheKey)) {
+            return surahTextCache.get(cacheKey)!;
+        }
+
+        const response = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/editions/quran-uthmani,${edition}`);
         const data = await response.json();
-        if (data.status === 'OK' && data.data.length >= 2) {
-            return {
+        if (data.status === 'OK' && data.data && data.data.length >= 2) {
+            const result = {
                 arabic: data.data[0].ayahs,
-                translation: data.data[1].ayahs
+                translation: data.data[1].ayahs,
             };
+            surahTextCache.set(cacheKey, result);
+            return result;
         }
         return { arabic: [], translation: [] };
     } catch (error) {

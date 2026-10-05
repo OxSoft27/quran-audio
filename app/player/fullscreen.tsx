@@ -3,6 +3,8 @@ import { useDownload } from '@/context/DownloadContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import { usePlaylist } from '@/context/PlaylistContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useSubscription } from '@/context/SubscriptionContext';
+import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
 import { Ayah, fetchSurahText, QARIS, Surah, getAudioUrl } from '@/services/quranApi';
 import { ALL_SURAHS, SurahItem } from '@/constants/surahsData';
 import { Typography } from '@/constants/Typography';
@@ -13,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import {
     ActionSheetIOS,
     ActivityIndicator,
@@ -120,6 +123,8 @@ export default function FullscreenPlayer() {
         downloadSurah,
         deleteDownloadedSurah,
     } = useDownload();
+    const { isPremium } = useSubscription();
+    const [isPremiumModalVisible, setIsPremiumModalVisible] = useState(false);
 
     const [showLyrics, setShowLyrics] = useState(false);
     const [lyrics, setLyrics] = useState<{ arabic: Ayah[]; translation: Ayah[] } | null>(null);
@@ -140,7 +145,27 @@ export default function FullscreenPlayer() {
     const currentAmbient = AMBIENT_SOUNDS.find((s) => s.id === selectedAmbient);
     const ambientVideoUrl = currentAmbient?.video;
 
+    const { t, i18n } = useTranslation();
+
+    const getAmbientLabel = (id: string) => {
+        switch (id) {
+            case 'none': return t('player.ambientOff', 'Mati');
+            case 'rain': return t('player.ambientRain', 'Hujan');
+            case 'fire': return t('player.ambientFire', 'Api');
+            case 'birds': return t('player.ambientBirds', 'Burung Hutan');
+            case 'wind': return t('player.ambientWind', 'Angin');
+            case 'waves': return t('player.ambientWaves', 'Ombak Laut');
+            default: return id;
+        }
+    };
+
     const handleSelectAmbient = (soundId: string) => {
+        if (soundId !== 'none' && soundId !== 'rain' && !isPremium) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setShowAmbientModal(false);
+            setIsPremiumModalVisible(true);
+            return;
+        }
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setSelectedAmbient(soundId);
         setShowAmbientModal(false);
@@ -148,13 +173,13 @@ export default function FullscreenPlayer() {
 
     useEffect(() => {
         if (currentTrack?.surahNumber) {
-            loadLyrics(currentTrack.surahNumber);
+            loadLyrics(currentTrack.surahNumber, i18n.language);
         }
-    }, [currentTrack?.surahNumber]);
+    }, [currentTrack?.surahNumber, i18n.language]);
 
-    const loadLyrics = async (number: number) => {
+    const loadLyrics = async (number: number, langCode?: string) => {
         setLoadingLyrics(true);
-        const data = await fetchSurahText(number);
+        const data = await fetchSurahText(number, langCode);
         setLyrics(data);
         setLoadingLyrics(false);
     };
@@ -335,6 +360,11 @@ export default function FullscreenPlayer() {
                 ]
             );
         } else {
+            if (!isPremium) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setIsPremiumModalVisible(true);
+                return;
+            }
             const surahItem = ALL_SURAHS.find((s) => s.number === currentTrack.surahNumber);
             const qari = QARIS.find((q) => q.id === currentTrack.qariId) || QARIS[0];
             if (surahItem) {
@@ -397,7 +427,7 @@ export default function FullscreenPlayer() {
                             color="#FFFFFF"
                             style={{ marginRight: 6 }}
                         />
-                        <Text style={styles.ambientPillText}>{currentAmbient?.name || 'Hujan'}</Text>
+                        <Text style={styles.ambientPillText}>{getAmbientLabel(currentAmbient?.id || 'rain')}</Text>
                     </BlurView>
                 </TouchableOpacity>
 
@@ -415,7 +445,7 @@ export default function FullscreenPlayer() {
                     />
                     <BlurView intensity={85} tint="dark" style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Suara Latar (Ambient)</Text>
+                            <Text style={styles.modalTitle}>{t('player.ambientTitle', 'Suara Latar (Ambient)')}</Text>
                             <TouchableOpacity onPress={() => setShowAmbientModal(false)}>
                                 <BlurView intensity={40} tint="dark" style={styles.closeBlurButton}>
                                     <Ionicons name="close" size={20} color="#FFF" />
@@ -430,33 +460,47 @@ export default function FullscreenPlayer() {
                                 paddingBottom: Spacing.sm + 2,
                             }}
                         >
-                            {AMBIENT_SOUNDS.map((sound) => (
-                                <TouchableOpacity
-                                    key={sound.id}
-                                    style={[
-                                        styles.ambientOption,
-                                        selectedAmbient === sound.id && styles.ambientOptionSelected,
-                                    ]}
-                                    onPress={() => handleSelectAmbient(sound.id)}
-                                    activeOpacity={0.8}
-                                >
-                                    <BlurView
-                                        intensity={selectedAmbient === sound.id ? 70 : 30}
-                                        tint="dark"
-                                        style={styles.ambientOptionBlur}
+                            {AMBIENT_SOUNDS.map((sound) => {
+                                const isLocked = sound.id !== 'none' && sound.id !== 'rain' && !isPremium;
+                                const isSelected = selectedAmbient === sound.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={sound.id}
+                                        style={[
+                                            styles.ambientOption,
+                                            isSelected && styles.ambientOptionSelected,
+                                        ]}
+                                        onPress={() => handleSelectAmbient(sound.id)}
+                                        activeOpacity={0.8}
                                     >
-                                        <FontAwesome5 name={sound.icon} size={22} color="#FFF" />
-                                        <Text
-                                            style={[
-                                                styles.ambientOptionText,
-                                                selectedAmbient === sound.id && { color: '#FFF', fontWeight: 'bold' },
-                                            ]}
+                                        <BlurView
+                                            intensity={isSelected ? 70 : 30}
+                                            tint="dark"
+                                            style={styles.ambientOptionBlur}
                                         >
-                                            {sound.name}
-                                        </Text>
-                                    </BlurView>
-                                </TouchableOpacity>
-                            ))}
+                                            {isLocked && (
+                                                <View style={styles.ambientLockBadge}>
+                                                    <Ionicons name="lock-closed" size={10} color="#F59E0B" />
+                                                </View>
+                                            )}
+                                            <FontAwesome5
+                                                name={sound.icon}
+                                                size={22}
+                                                color={isLocked ? "rgba(255, 255, 255, 0.6)" : "#FFF"}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.ambientOptionText,
+                                                    isSelected && { color: '#FFF', fontWeight: 'bold' },
+                                                    isLocked && { color: 'rgba(255, 255, 255, 0.6)' },
+                                                ]}
+                                            >
+                                                {getAmbientLabel(sound.id)}
+                                            </Text>
+                                        </BlurView>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
                     </BlurView>
                 </View>
@@ -467,7 +511,19 @@ export default function FullscreenPlayer() {
                 {showLyrics ? (
                     <View style={styles.lyricsContainer}>
                         {loadingLyrics ? (
-                            <ActivityIndicator size="large" color="#FFFFFF" />
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                <ActivityIndicator size="large" color="#FFFFFF" />
+                                <Text style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: 12, fontSize: 13 }}>
+                                    {t('player.lyricsLoading', 'Memuat terjemahan...')}
+                                </Text>
+                            </View>
+                        ) : combinedLyrics.length === 0 ? (
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                                <Ionicons name="document-text-outline" size={32} color="rgba(255, 255, 255, 0.4)" />
+                                <Text style={{ color: 'rgba(255, 255, 255, 0.6)', marginTop: 10, fontSize: 14 }}>
+                                    {t('player.lyricsEmpty', 'Terjemahan lirik belum tersedia')}
+                                </Text>
+                            </View>
                         ) : (
                             <FlatList
                                 data={combinedLyrics}
@@ -517,9 +573,9 @@ export default function FullscreenPlayer() {
                                             <ActivityIndicator size="small" color="#10B981" />
                                         ) : (
                                             <Ionicons
-                                                name={isCurrentDownloaded ? 'checkmark-circle' : 'arrow-down-circle-outline'}
-                                                size={20}
-                                                color={isCurrentDownloaded ? '#10B981' : '#FFFFFF'}
+                                                name={isCurrentDownloaded ? 'checkmark-circle' : !isPremium ? 'lock-closed-outline' : 'arrow-down-circle-outline'}
+                                                size={isCurrentDownloaded || isPremium ? 20 : 18}
+                                                color={isCurrentDownloaded ? '#10B981' : !isPremium ? '#F59E0B' : '#FFFFFF'}
                                             />
                                         )}
                                     </BlurView>
@@ -925,6 +981,12 @@ export default function FullscreenPlayer() {
                     </BlurView>
                 </View>
             </Modal>
+
+            {/* Premium Paywall Modal */}
+            <PremiumPaywallModal
+                visible={isPremiumModalVisible}
+                onClose={() => setIsPremiumModalVisible(false)}
+            />
         </View>
     );
 }
@@ -1576,5 +1638,17 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         color: '#10B981',
+    },
+    ambientLockBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: 'rgba(245, 158, 11, 0.25)',
+        borderRadius: 8,
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: 'rgba(245, 158, 11, 0.45)',
+        zIndex: 5,
     },
 });

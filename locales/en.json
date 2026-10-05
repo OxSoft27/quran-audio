@@ -105,6 +105,15 @@
     "sleepTimer": "Sleep Timer",
     "speed": "Playback Speed",
     "downloadSurah": "Download Surah",
-    "shareSurah": "Share Surah"
+    "shareSurah": "Share Surah",
+    "ambientTitle": "Ambient Atmosphere",
+    "ambientOff": "Off",
+    "ambientRain": "Rain",
+    "ambientFire": "Fireplace",
+    "ambientBirds": "Forest Birds",
+    "ambientWind": "Breeze",
+    "ambientWaves": "Ocean Waves",
+    "lyricsLoading": "Loading lyrics...",
+    "lyricsEmpty": "Lyrics translation not available"
   }
 }

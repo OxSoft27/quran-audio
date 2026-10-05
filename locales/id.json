@@ -105,6 +105,15 @@
     "sleepTimer": "Pengatur Waktu Tidur",
     "speed": "Kecepatan Putar",
     "downloadSurah": "Unduh Surah Ini",
-    "shareSurah": "Bagikan Surah"
+    "shareSurah": "Bagikan Surah",
+    "ambientTitle": "Suara Latar (Ambient)",
+    "ambientOff": "Mati",
+    "ambientRain": "Hujan",
+    "ambientFire": "Api",
+    "ambientBirds": "Burung Hutan",
+    "ambientWind": "Angin",
+    "ambientWaves": "Ombak Laut",
+    "lyricsLoading": "Memuat terjemahan...",
+    "lyricsEmpty": "Terjemahan lirik belum tersedia"
   }
 }

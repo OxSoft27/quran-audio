@@ -105,6 +105,15 @@
     "sleepTimer": "مؤقت النوم",
     "speed": "سرعة التلاوة",
     "downloadSurah": "تحميل هذه السورة",
-    "shareSurah": "مشاركة السورة"
+    "shareSurah": "مشاركة السورة",
+    "ambientTitle": "أصوات الطبيعة (Ambient)",
+    "ambientOff": "إيقاف",
+    "ambientRain": "مطر",
+    "ambientFire": "مدفأة",
+    "ambientBirds": "طيور الغابة",
+    "ambientWind": "رياح هادئة",
+    "ambientWaves": "أمواج البحر",
+    "lyricsLoading": "جارٍ تحميل الترجمة...",
+    "lyricsEmpty": "الترجمة غير متوفرة"
   }
 }

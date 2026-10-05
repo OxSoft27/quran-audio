@@ -193,19 +193,27 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     };
 
     const setSelectedAmbient = async (soundId: string) => {
-        selectedAmbientRef.current = soundId;
-        setSelectedAmbientState(soundId);
-        AsyncStorage.setItem('selected_ambient', soundId).catch(() => { });
+        let targetSoundId = soundId;
+        // Premium guard: only 'none' and 'rain' are free, others require premium
+        if (targetSoundId !== 'none' && targetSoundId !== 'rain') {
+            const isPrem = await checkPremiumStatus();
+            if (!isPrem) {
+                targetSoundId = 'rain';
+            }
+        }
+        selectedAmbientRef.current = targetSoundId;
+        setSelectedAmbientState(targetSoundId);
+        AsyncStorage.setItem('selected_ambient', targetSoundId).catch(() => { });
 
         if (!ambientPlayer) return;
-        if (soundId === 'none' || !AMBIENT_AUDIO_MAP[soundId]) {
+        if (targetSoundId === 'none' || !AMBIENT_AUDIO_MAP[targetSoundId]) {
             try {
                 ambientPlayer.pause();
             } catch (_) { }
             return;
         }
 
-        const audioAsset = AMBIENT_AUDIO_MAP[soundId];
+        const audioAsset = AMBIENT_AUDIO_MAP[targetSoundId];
         try {
             await Asset.loadAsync(audioAsset);
             ambientPlayer.replace(audioAsset);
@@ -289,7 +297,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
                     } catch (_) { }
                 }
             }
-            const initialSoundId = savedAmbient || 'rain';
+            let initialSoundId = savedAmbient || 'rain';
+            if (initialSoundId !== 'none' && initialSoundId !== 'rain') {
+                const isPrem = await checkPremiumStatus();
+                if (!isPrem) {
+                    initialSoundId = 'rain';
+                }
+            }
             selectedAmbientRef.current = initialSoundId;
             setSelectedAmbientState(initialSoundId);
 
