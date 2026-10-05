@@ -45,8 +45,7 @@ assets/audio/ambient_original/
 assets/videos/raw_originals/
 
 # temp & media
-*.MP4
-*.mp4
+/ScreenRecording_*
 *.certSigningRequest
 /test_*.jpg
 /Masjid.jpg
