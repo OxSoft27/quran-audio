@@ -378,7 +378,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     };
 
     // Core play method used both internally and externally
-    const playSurahInternal = async (url: string, details: TitleDetails) => {
+    const playSurahInternal = useCallback(async (url: string, details: TitleDetails) => {
         try {
             // Check if downloaded locally for 100% offline playback (skip if playing a specific ayah from notification)
             const localUri = details.ayahNumber ? null : getLocalAudioUri(details.qariId, details.surahNumber);
@@ -475,7 +475,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
             console.error('Error playing audio:', error);
         }
-    };
+    }, [player, getLocalAudioUri]);
 
     const playNext = useCallback(async () => {
         const track = currentTrackRef.current;
@@ -653,9 +653,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }, [status.didJustFinish, status.currentTime, status.duration, status.playing, status.isBuffering, handleAutoNext]);
 
     // Public exposed function
-    const playSurah = async (url: string, details: TitleDetails) => {
+    const playSurah = useCallback(async (url: string, details: TitleDetails) => {
         await playSurahInternal(url, details);
-    };
+    }, [playSurahInternal]);
 
     const toggleAutoPlay = async () => {
         const newValue = !isAutoPlayEnabled;

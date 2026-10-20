@@ -31,7 +31,10 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -51,4 +54,6 @@ assets/videos/raw_originals/
 /Masjid.jpg
 referensi/
 assets/images/qaris_backup*/
+/*screenshot*.png
+/*paywall*.png
 

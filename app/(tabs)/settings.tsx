@@ -143,27 +143,6 @@ export default function SettingsScreen() {
         setIsPremiumModalVisible(true);
     };
 
-    const handleRedeemCode = () => {
-        if (Platform.OS === 'ios') {
-            Alert.prompt(
-                'Aktifkan Kode',
-                'Masukkan kode promo atau voucher Premium:',
-                [
-                    { text: 'Batal', style: 'cancel' },
-                    {
-                        text: 'Aktifkan',
-                        onPress: (code?: string) => {
-                            if (code && code.trim().length > 0) {
-                                Alert.alert('Sukses', `Kode ${code.toUpperCase()} berhasil diaktifkan!`);
-                            }
-                        },
-                    },
-                ]
-            );
-        } else {
-            Alert.alert('Aktifkan Kode', 'Fitur masukkan kode promo aktif.');
-        }
-    };
 
     const handleNotificationPress = async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -210,7 +189,7 @@ export default function SettingsScreen() {
                                 },
                                 trigger: null,
                             });
-                            Alert.alert('Terkirim!', 'Notifikasi tes telah dikirimkan. Ketuk banner notifikasi untuk menguji pemutaran murottal otomatis.');
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                         },
                     },
                     {
@@ -500,11 +479,6 @@ export default function SettingsScreen() {
                         icon={<Ionicons name="diamond-outline" size={20} color={iconColor} />}
                         label="Dapatkan Premium"
                         onPress={handleOpenPremium}
-                    />
-                    <RowItem
-                        icon={<Ionicons name="pricetag-outline" size={20} color={iconColor} />}
-                        label="Aktifkan kode"
-                        onPress={handleRedeemCode}
                         isLast
                     />
                 </SectionGroup>
@@ -566,16 +540,6 @@ export default function SettingsScreen() {
 
                 {/* Section: Bantu kami berkembang */}
                 <SectionGroup title={`🤍 ${t('settings.helpUsGrow', 'Bantu kami berkembang')}`}>
-                    <RowItem
-                        icon={
-                            <View style={styles.giftIconWrap}>
-                                <Ionicons name="gift" size={16} color="#FFFFFF" />
-                            </View>
-                        }
-                        label={t('settings.freePremiumChallenge', 'Tantangan Premium gratis')}
-                        sublabel={t('settings.freePremiumChallengeDesc', 'Posting QuranFlow di media sosial dan dapatkan keanggotaan premium gratis')}
-                        onPress={() => Alert.alert('Coming Soon', 'Fitur Tantangan Premium Gratis akan segera hadir.')}
-                    />
                     <RowItem
                         icon={<Ionicons name="bulb-outline" size={20} color={iconColor} />}
                         label={t('settings.suggestFeature', 'Minta atau sarankan fitur')}

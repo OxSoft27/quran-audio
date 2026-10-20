@@ -87,11 +87,28 @@ export async function fetchOfferings(): Promise<{
 }
 
 /**
+ * Helper to determine if CustomerInfo grants Premium access
+ */
+export function isCustomerPremium(customerInfo?: CustomerInfo | null): boolean {
+    if (!customerInfo) return false;
+    const hasNamedEntitlement = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+    const hasAnyActiveEntitlement = Object.keys(customerInfo.entitlements.active).length > 0;
+    const hasActiveSubscription = Array.isArray(customerInfo.activeSubscriptions) && customerInfo.activeSubscriptions.length > 0;
+    return hasNamedEntitlement || hasAnyActiveEntitlement || hasActiveSubscription;
+}
+
+/**
  * Purchase a selected subscription package
  */
 export async function purchaseSubscriptionPackage(
     pkg: PurchasesPackage
-): Promise<{ success: boolean; customerInfo?: CustomerInfo; error?: any }> {
+): Promise<{
+    success: boolean;
+    customerInfo?: CustomerInfo;
+    userCancelled?: boolean;
+    error?: any;
+    errorMessage?: string;
+}> {
     if (isExpoGo || !isConfigured) {
         // Mock purchase in Expo Go
         await AsyncStorage.setItem(MOCK_STORAGE_KEY, 'true');
@@ -100,14 +117,25 @@ export async function purchaseSubscriptionPackage(
 
     try {
         const { customerInfo } = await Purchases.purchasePackage(pkg);
-        const isPremium =
-            customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+        const isPremium = isCustomerPremium(customerInfo);
         return { success: isPremium, customerInfo };
     } catch (error: any) {
-        if (!error.userCancelled) {
+        const isUserCancelled =
+            Boolean(error?.userCancelled) ||
+            error?.code === 1 ||
+            error?.code === '1' ||
+            error?.message?.toLowerCase().includes('cancel');
+
+        if (!isUserCancelled) {
             console.error('❌ [RevenueCat] Pembelian gagal:', error);
         }
-        return { success: false, error };
+
+        return {
+            success: false,
+            userCancelled: isUserCancelled,
+            error,
+            errorMessage: error?.message || 'Pembelian tidak dapat diselesaikan.',
+        };
     }
 }
 
@@ -125,8 +153,7 @@ export async function restorePurchases(): Promise<{
 
     try {
         const customerInfo = await Purchases.restorePurchases();
-        const isPremium =
-            customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+        const isPremium = isCustomerPremium(customerInfo);
         return { success: isPremium, customerInfo };
     } catch (error) {
         console.error('❌ [RevenueCat] Restore gagal:', error);
@@ -149,7 +176,7 @@ export async function checkPremiumStatus(): Promise<boolean> {
 
     try {
         const customerInfo = await Purchases.getCustomerInfo();
-        return customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+        return isCustomerPremium(customerInfo);
     } catch (error) {
         console.warn('⚠️ [RevenueCat] Gagal cek status customer:', error);
         return false;

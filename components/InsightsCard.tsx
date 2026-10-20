@@ -185,16 +185,62 @@ export const InsightsCard: React.FC<InsightsCardProps> = ({
         };
     }, [isPlaying]);
 
+    const currentDayIndex = (new Date().getDay() + 6) % 7; // 0 = Sen, 1 = Sel, ..., 6 = Min
+    const [completedDays, setCompletedDays] = useState<number[]>([0, 1]);
+
     const loadStats = async () => {
         try {
-            const savedSec = await AsyncStorage.getItem('@today_listening_seconds');
-            if (savedSec) {
-                setTodaySeconds(parseInt(savedSec, 10));
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const savedDate = await AsyncStorage.getItem('@today_listening_date');
+
+            if (savedDate !== todayStr) {
+                await AsyncStorage.setItem('@today_listening_date', todayStr);
+                await AsyncStorage.setItem('@today_listening_seconds', '0');
+                setTodaySeconds(0);
+            } else {
+                const savedSec = await AsyncStorage.getItem('@today_listening_seconds');
+                if (savedSec) {
+                    setTodaySeconds(parseInt(savedSec, 10));
+                }
             }
+
+            const savedCompleted = await AsyncStorage.getItem('@listening_completed_days_v2');
+            if (savedCompleted) {
+                try {
+                    setCompletedDays(JSON.parse(savedCompleted));
+                } catch (_) { }
+            } else {
+                // Initialize completed days for past days up to current day
+                const initialDays: number[] = [];
+                for (let i = 0; i < currentDayIndex; i++) {
+                    initialDays.push(i);
+                }
+                setCompletedDays(initialDays);
+            }
+
+            const savedStreak = await AsyncStorage.getItem('@streak_days');
+            if (savedStreak) setStreakDays(parseInt(savedStreak, 10));
+
+            const savedTarget = await AsyncStorage.getItem('@target_minutes');
+            if (savedTarget) setTargetMinutes(parseInt(savedTarget, 10));
         } catch (e) {
             // fallback to initial
         }
     };
+
+    // Auto-record completion when user reaches today's goal
+    useEffect(() => {
+        if (todaySeconds >= targetMinutes * 60) {
+            setCompletedDays((prev) => {
+                if (!prev.includes(currentDayIndex)) {
+                    const next = [...prev, currentDayIndex];
+                    AsyncStorage.setItem('@listening_completed_days_v2', JSON.stringify(next));
+                    return next;
+                }
+                return prev;
+            });
+        }
+    }, [todaySeconds, targetMinutes, currentDayIndex]);
 
     const formatMinutesSeconds = (totalSec: number) => {
         const m = Math.floor(totalSec / 60);
@@ -204,15 +250,27 @@ export const InsightsCard: React.FC<InsightsCardProps> = ({
 
     const strokeOffset = CIRCUMFERENCE * (1 - animatedRatio);
 
-    const days = [
-        { label: 'Sen', status: 'done' },
-        { label: 'Sel', status: 'done' },
-        { label: 'Rab', status: 'done' },
-        { label: 'Kam', status: 'done' },
-        { label: 'Jum', status: 'done' },
-        { label: 'Sab', status: 'done' },
-        { label: 'Min', status: 'today' },
-    ];
+    const DAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+    const days = DAY_LABELS.map((label, idx) => {
+        if (idx === currentDayIndex) {
+            const isTodayDone = todaySeconds >= targetMinutes * 60 || completedDays.includes(idx);
+            return {
+                label,
+                status: isTodayDone ? ('done' as const) : ('today' as const),
+            };
+        } else if (idx < currentDayIndex) {
+            const isDone = completedDays.includes(idx);
+            return {
+                label,
+                status: isDone ? ('done' as const) : ('missed' as const),
+            };
+        } else {
+            return {
+                label,
+                status: 'upcoming' as const,
+            };
+        }
+    });
 
     return (
         <View style={styles.container} onLayout={handleLayout}>
@@ -331,7 +389,14 @@ export const InsightsCard: React.FC<InsightsCardProps> = ({
                                     <View style={styles.todayInnerRing} />
                                 </View>
                             )}
-                            <Text style={styles.dayLabel}>{d.label}</Text>
+                            {d.status === 'upcoming' && (
+                                <View style={styles.upcomingIcon}>
+                                    <View style={styles.upcomingInnerDot} />
+                                </View>
+                            )}
+                            <Text style={[styles.dayLabel, index === currentDayIndex && styles.dayLabelToday]}>
+                                {d.label}
+                            </Text>
                         </View>
                     ))}
                 </View>
@@ -499,10 +564,30 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         backgroundColor: '#1DB8B5',
     },
+    upcomingIcon: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: 1.5,
+        borderColor: 'rgba(255, 255, 255, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    upcomingInnerDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
     dayLabel: {
         fontSize: 11,
         color: 'rgba(255, 255, 255, 0.6)',
         fontWeight: '500',
+    },
+    dayLabelToday: {
+        color: '#25E2DE',
+        fontWeight: '700',
     },
     continueButton: {
         flexDirection: 'row',

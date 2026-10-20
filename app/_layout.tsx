@@ -1,23 +1,20 @@
+import { AudioProvider, useAudio } from '@/context/AudioContext';
 import { DownloadProvider } from '@/context/DownloadContext';
-import { AudioProvider } from '@/context/AudioContext';
 import { FavoritesProvider } from '@/context/FavoritesContext';
 import { PlaylistProvider } from '@/context/PlaylistContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from 'expo-router';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
-import 'react-native-reanimated';
+import { executeDirectPlayback, parseDeepLinkUrl, parseNotificationResponse } from '@/services/deepLinkHandler';
 import '@/services/i18n';
+import { refreshNotificationSchedule } from '@/services/notificationService';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useRootNavigationState } from 'expo-router';
+import { useFonts } from 'expo-font';
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
-import { useAudio } from '@/context/AudioContext';
-import { refreshNotificationSchedule } from '@/services/notificationService';
-import { parseDeepLinkUrl, parseNotificationResponse, executeDirectPlayback } from '@/services/deepLinkHandler';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider, Stack, useRootNavigationState, useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useState, useRef } from 'react';
+import 'react-native-reanimated';
 
 export {
   ErrorBoundary
@@ -29,8 +26,8 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
-import { SubscriptionProvider } from '@/context/SubscriptionContext';
 import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
+import { SubscriptionProvider } from '@/context/SubscriptionContext';
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -38,7 +35,7 @@ export default function RootLayout() {
     'AmiriQuran': require('@/assets/fonts/AmiriQuran-Regular.ttf'),
     'Amiri-Bold': require('@/assets/fonts/Amiri-Bold.ttf'),
   });
-  
+
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [isSplashFinished, setIsSplashFinished] = useState<boolean>(false);
 
@@ -94,6 +91,17 @@ function RootLayoutNav({ hasCompletedOnboarding }: { hasCompletedOnboarding: boo
   const rootNavigationState = useRootNavigationState();
   const { playSurah } = useAudio();
 
+  // Stable references for async event callbacks
+  const playSurahRef = useRef(playSurah);
+  useEffect(() => {
+    playSurahRef.current = playSurah;
+  }, [playSurah]);
+
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
+
   useEffect(() => {
     if (!rootNavigationState?.key) return;
 
@@ -103,48 +111,52 @@ function RootLayoutNav({ hasCompletedOnboarding }: { hasCompletedOnboarding: boo
         router.replace('/(onboarding)/01-select-qari');
       }, 0);
     }
-  }, [hasCompletedOnboarding, rootNavigationState?.key]);
+  }, [hasCompletedOnboarding, rootNavigationState?.key, router]);
 
-  // Deep Linking & Notification Response Listener
+  // Cold start notification & deep link check (executes strictly ONCE on startup)
+  const isColdStartCheckedRef = useRef(false);
   useEffect(() => {
     if (!rootNavigationState?.key) return;
+    if (isColdStartCheckedRef.current) return;
+    isColdStartCheckedRef.current = true;
 
     // 1. Refresh notification schedule & sync widget daily verse
     refreshNotificationSchedule();
 
-    // 2. Handle deep linking when app is open
-    const urlSub = Linking.addEventListener('url', async ({ url }) => {
-      const payload = parseDeepLinkUrl(url);
-      if (payload) {
-        await executeDirectPlayback(payload, playSurah, router);
-      }
-    });
-
-    // 3. Handle deep link from cold start
-    Linking.getInitialURL().then(async (url) => {
-      if (url) {
-        const payload = parseDeepLinkUrl(url);
-        if (payload) {
-          await executeDirectPlayback(payload, playSurah, router);
-        }
-      }
-    });
-
-    // 4. Handle notification response while app is running/background
-    const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      const payload = parseNotificationResponse(response);
-      if (payload) {
-        await executeDirectPlayback(payload, playSurah, router);
-      }
-    });
-
-    // 5. Handle cold start notification response
+    // 2. Handle cold start (check notification first; only check initialURL if not from notification)
     Notifications.getLastNotificationResponseAsync().then(async (response) => {
       if (response) {
         const payload = parseNotificationResponse(response);
-        if (payload) {
-          await executeDirectPlayback(payload, playSurah, router);
+        if (payload && playSurahRef.current && routerRef.current) {
+          await executeDirectPlayback(payload, playSurahRef.current, routerRef.current);
+          return;
         }
+      }
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl && playSurahRef.current && routerRef.current) {
+        const payload = parseDeepLinkUrl(initialUrl, true);
+        if (payload) {
+          await executeDirectPlayback(payload, playSurahRef.current, routerRef.current);
+        }
+      }
+    }).catch((err) => {
+      console.warn('[RootLayoutNav] Error checking initial notification response:', err);
+    });
+  }, [rootNavigationState?.key]);
+
+  // Runtime event listeners (mounted ONCE for lifetime of app, uses latest refs)
+  useEffect(() => {
+    const urlSub = Linking.addEventListener('url', async ({ url }) => {
+      const payload = parseDeepLinkUrl(url);
+      if (payload && playSurahRef.current && routerRef.current) {
+        await executeDirectPlayback(payload, playSurahRef.current, routerRef.current);
+      }
+    });
+
+    const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      const payload = parseNotificationResponse(response);
+      if (payload && playSurahRef.current && routerRef.current) {
+        await executeDirectPlayback(payload, playSurahRef.current, routerRef.current);
       }
     });
 
@@ -152,7 +164,7 @@ function RootLayoutNav({ hasCompletedOnboarding }: { hasCompletedOnboarding: boo
       urlSub.remove();
       notifSub.remove();
     };
-  }, [rootNavigationState?.key, playSurah, router]);
+  }, []);
 
   return (
     <NavThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>

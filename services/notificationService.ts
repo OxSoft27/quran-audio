@@ -89,22 +89,36 @@ export async function isNotificationPermitted(): Promise<boolean> {
   }
 }
 
+let isSchedulingLock = false;
+
 /**
  * Schedule automated daily notifications for the next 30 days
  * Prioritizes Friday reminders for Fridays and rotates through emotion categories.
+ * Uses deterministic date identifiers to guarantee iOS never fires multiple notifications per day.
  */
 export async function scheduleDailyVersesForNext30Days(
   preferredHour: number = 20,
   preferredMinute: number = 0
 ): Promise<number> {
+  if (isSchedulingLock) {
+    console.log('[notificationService] Scheduling already in progress, skipping duplicate call.');
+    return 0;
+  }
+  isSchedulingLock = true;
+
   try {
     const isGranted = await isNotificationPermitted();
     if (!isGranted) return 0;
 
     await initNotifications();
 
-    // Cancel existing scheduled notifications to refresh with new randomized sequence
+    // 1. Explicitly cancel every existing scheduled notification by identifier
+    const existing = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(existing.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
     await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // Small delay to let iOS UNUserNotificationCenter fully flush its persistent queue
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Store user time preference and last schedule timestamp
     await AsyncStorage.setItem(NOTIFICATION_HOUR_KEY, preferredHour.toString());
@@ -141,7 +155,12 @@ export async function scheduleDailyVersesForNext30Days(
       // Deep link URL payload
       const deepLinkUrl = `quranflow://play?surah=${verse.surahNumber}&ayah=${verse.ayahNumber}&audioUrl=${encodeURIComponent(verse.audioUrl)}&surahName=${encodeURIComponent(verse.surahName)}`;
 
+      // Deterministic identifier per calendar day (e.g. quran-daily-2026-10-20)
+      // Guarantees iOS UNNotificationCenter overwrites instead of creating multiple notifications per day!
+      const dateId = `quran-daily-${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
       await Notifications.scheduleNotificationAsync({
+        identifier: dateId,
         content: {
           title: `✨ ${verse.title}`,
           body: `${verse.arabic}\n\n"${verse.body}"\n— QS. ${verse.surahName}: ${verse.ayahNumber}`,
@@ -171,8 +190,12 @@ export async function scheduleDailyVersesForNext30Days(
   } catch (error) {
     console.error('Error scheduling daily notifications:', error);
     return 0;
+  } finally {
+    isSchedulingLock = false;
   }
 }
+
+const CLEANUP_MIGRATION_KEY = '@quran_daily_notif_cleanup_v3';
 
 /**
  * Refresh notifications schedule on app open.
@@ -190,7 +213,32 @@ export async function refreshNotificationSchedule(): Promise<void> {
 
     if (!isGranted) return;
 
-    // 2. Cooldown check: avoid rescheduling multiple times within 24 hours
+    // 2. One-time migration: wipe any ghost/legacy notifications from older builds
+    const hasCleaned = await AsyncStorage.getItem(CLEANUP_MIGRATION_KEY);
+    if (!hasCleaned) {
+      console.log('[notificationService] Running one-time migration: clearing all legacy scheduled notifications...');
+      const existing = await Notifications.getAllScheduledNotificationsAsync();
+      await Promise.all(existing.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      await AsyncStorage.setItem(CLEANUP_MIGRATION_KEY, 'true');
+
+      const savedHour = await AsyncStorage.getItem(NOTIFICATION_HOUR_KEY);
+      const savedMinute = await AsyncStorage.getItem(NOTIFICATION_MINUTE_KEY);
+      const hour = savedHour !== null ? parseInt(savedHour, 10) : 20;
+      const minute = savedMinute !== null ? parseInt(savedMinute, 10) : 0;
+      await scheduleDailyVersesForNext30Days(hour, minute);
+      return;
+    }
+
+    // 3. Purge any non-deterministic ghost notifications that don't match our pattern
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const legacy = scheduled.filter((n) => !n.identifier.startsWith('quran-daily-'));
+    if (legacy.length > 0) {
+      console.log(`[notificationService] Removing ${legacy.length} legacy notifications...`);
+      await Promise.all(legacy.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
+    }
+
+    // 4. Cooldown check: avoid rescheduling multiple times within 24 hours
     const lastScheduledStr = await AsyncStorage.getItem(NOTIFICATION_LAST_SCHEDULED_KEY);
     if (lastScheduledStr) {
       const lastScheduledTime = parseInt(lastScheduledStr, 10);
@@ -200,11 +248,9 @@ export async function refreshNotificationSchedule(): Promise<void> {
       }
     }
 
-    // 3. Check scheduled notifications count
-    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-
-    // If fewer than 7 notifications are left, regenerate the 30-day queue
-    if (scheduled.length < 7) {
+    // 5. If fewer than 7 notifications are left, regenerate the 30-day queue
+    const validScheduled = scheduled.filter((n) => n.identifier.startsWith('quran-daily-'));
+    if (validScheduled.length < 7) {
       const savedHour = await AsyncStorage.getItem(NOTIFICATION_HOUR_KEY);
       const savedMinute = await AsyncStorage.getItem(NOTIFICATION_MINUTE_KEY);
 

@@ -39,8 +39,8 @@ export const PremiumPaywallModal: React.FC<PremiumPaywallModalProps> = ({ visibl
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setIsProcessing(true);
         try {
-            const success = await purchasePlan(selectedPlan);
-            if (success) {
+            const res = await purchasePlan(selectedPlan);
+            if (res.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert(
                     'Alhamdulillah!',
@@ -49,9 +49,14 @@ export const PremiumPaywallModal: React.FC<PremiumPaywallModalProps> = ({ visibl
                         : 'Fitur Premium berhasil diaktifkan untuk akun Anda selama masa percobaan 1 minggu gratis.',
                     [{ text: 'Mulai Menikmati', onPress: onClose }]
                 );
-            } else {
-                Alert.alert('Informasi', 'Transaksi dibatalkan atau belum dapat diproses.');
+            } else if (!res.userCancelled) {
+                // Hanya tampilkan alert jika bukan pembatalan oleh pengguna/reviewer
+                Alert.alert(
+                    'Kendala Pembelian',
+                    res.errorMessage || 'Terjadi kendala saat memproses pembelian. Pastikan koneksi internet dan akun Apple ID Anda aktif.'
+                );
             }
+            // Jika res.userCancelled === true: diam tanpa memunculkan alert error
         } catch (e: any) {
             Alert.alert('Gagal', 'Terjadi kendala saat memproses pembelian. Silakan coba kembali.');
         } finally {

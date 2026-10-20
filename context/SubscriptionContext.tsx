@@ -9,6 +9,12 @@ import {
     isExpoGo,
 } from '@/services/revenueCatService';
 
+export interface PurchasePlanResult {
+    success: boolean;
+    userCancelled?: boolean;
+    errorMessage?: string;
+}
+
 interface SubscriptionContextType {
     isPremium: boolean;
     isLoading: boolean;
@@ -16,7 +22,7 @@ interface SubscriptionContextType {
     monthlyPackage: PurchasesPackage | null;
     yearlyPackage: PurchasesPackage | null;
     allPackages: PurchasesPackage[];
-    purchasePlan: (plan: 'monthly' | 'yearly') => Promise<boolean>;
+    purchasePlan: (plan: 'monthly' | 'yearly') => Promise<PurchasePlanResult>;
     restore: () => Promise<boolean>;
     refreshStatus: () => Promise<void>;
 }
@@ -28,7 +34,7 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
     monthlyPackage: null,
     yearlyPackage: null,
     allPackages: [],
-    purchasePlan: async () => false,
+    purchasePlan: async () => ({ success: false }),
     restore: async () => false,
     refreshStatus: async () => { },
 });
@@ -61,7 +67,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         loadOfferingsAndStatus();
     }, [loadOfferingsAndStatus]);
 
-    const purchasePlan = async (plan: 'monthly' | 'yearly'): Promise<boolean> => {
+    const purchasePlan = async (plan: 'monthly' | 'yearly'): Promise<PurchasePlanResult> => {
         setIsLoading(true);
         try {
             const targetPkg = plan === 'yearly' ? yearlyPackage : monthlyPackage;
@@ -71,17 +77,25 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 const res = await purchaseSubscriptionPackage(targetPkg as any);
                 if (res.success) {
                     setIsPremium(true);
-                    return true;
+                    return { success: true };
                 }
-                return false;
+                return {
+                    success: false,
+                    userCancelled: res.userCancelled,
+                    errorMessage: res.errorMessage,
+                };
             }
 
             const res = await purchaseSubscriptionPackage(targetPkg);
             if (res.success) {
                 setIsPremium(true);
-                return true;
+                return { success: true };
             }
-            return false;
+            return {
+                success: false,
+                userCancelled: res.userCancelled,
+                errorMessage: res.errorMessage,
+            };
         } finally {
             setIsLoading(false);
         }
