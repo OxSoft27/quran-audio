@@ -8,9 +8,19 @@ import { ACTIVE_BANNER_ID, isExpoGo } from '@/services/adMobService';
 import { Ionicons } from '@expo/vector-icons';
 import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
 
-// Native Google Mobile Ads Banner (null saat di Expo Go / mode development)
-const BannerAd: any = null;
-const BannerAdSize: any = null;
+// Native Google Mobile Ads Banner (aman di Expo Go & aktif di Standalone Production)
+let BannerAd: any = null;
+let BannerAdSize: any = null;
+
+if (!isExpoGo) {
+    try {
+        const GoogleMobileAds = require('react-native-google-mobile-ads');
+        BannerAd = GoogleMobileAds.BannerAd;
+        BannerAdSize = GoogleMobileAds.BannerAdSize;
+    } catch (e) {
+        console.warn('⚠️ [AdMob] BannerAd native module could not be loaded:', e);
+    }
+}
 
 interface AdBannerComponentProps {
     bottomOffset?: number;
@@ -22,7 +32,7 @@ export const AdBannerComponent: React.FC<AdBannerComponentProps> = ({ bottomOffs
     const isDark = theme === 'dark';
     const { adBannerAnimatedStyle } = useTabBarAnimation();
     const [paywallVisible, setPaywallVisible] = useState(false);
-    const [adLoaded, setAdLoaded] = useState(true);
+    const [adLoaded, setAdLoaded] = useState(false);
 
     // Pengguna Premium 100% bebas dari segala jenis iklan
     if (isPremium) {
@@ -74,10 +84,21 @@ export const AdBannerComponent: React.FC<AdBannerComponentProps> = ({ bottomOffs
 
     // Tampilan di Native Build (Production / Real Google AdMob Banner)
     return (
-        <Animated.View style={[styles.container, { bottom: bottomOffset }, adBannerAnimatedStyle]}>
+        <Animated.View style={[
+            styles.container,
+            {
+                bottom: bottomOffset,
+                backgroundColor: 'transparent',
+                borderWidth: 0,
+                elevation: 0,
+                shadowOpacity: 0,
+            },
+            adBannerAnimatedStyle,
+            !adLoaded && { height: 0, opacity: 0, overflow: 'hidden' }
+        ]}>
             <BannerAd
                 unitId={ACTIVE_BANNER_ID}
-                size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER || BannerAdSize.BANNER}
+                size={BannerAdSize?.ANCHORED_ADAPTIVE_BANNER || BannerAdSize?.BANNER}
                 requestOptions={{
                     requestNonPersonalizedAdsOnly: true,
                 }}

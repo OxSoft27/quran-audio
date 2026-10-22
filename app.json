@@ -2,7 +2,7 @@
   "expo": {
     "name": "QuranFlow",
     "slug": "quranflow",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "quranflow",
@@ -93,7 +93,38 @@
           "color": "#1DB8B5"
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "iosAppId": "ca-app-pub-5515124991118089~1890726735",
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork",
+            "4fzdc2evr5.skadnetwork",
+            "2fnua5tdw4.skadnetwork",
+            "ydx93a7ass.skadnetwork",
+            "p78axxw29g.skadnetwork",
+            "v72qych544.skadnetwork",
+            "mlmmfzh3r3.skadnetwork",
+            "c6k4g5qg8m.skadnetwork",
+            "w9fl98au8k.skadnetwork",
+            "wzmmz9fp6w.skadnetwork",
+            "yclnxrl5pm.skadnetwork",
+            "t38b2kh725.skadnetwork",
+            "7ug5zh24hu.skadnetwork",
+            "gta9lk7p23.skadnetwork",
+            "v4nxxm6tvp.skadnetwork",
+            "22mmun2rn5.skadnetwork",
+            "424m5254lk.skadnetwork",
+            "ecpz2srf59.skadnetwork",
+            "uw77j35644.skadnetwork",
+            "e5fvkx65mn.skadnetwork",
+            "zq4928m33l.skadnetwork",
+            "3rd42ekr43.skadnetwork",
+            "3qcr597p9d.skadnetwork"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

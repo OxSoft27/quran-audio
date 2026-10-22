@@ -5,6 +5,7 @@ import { PlaylistProvider } from '@/context/PlaylistContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { executeDirectPlayback, parseDeepLinkUrl, parseNotificationResponse } from '@/services/deepLinkHandler';
 import '@/services/i18n';
+import { initializeAdMob } from '@/services/adMobService';
 import { refreshNotificationSchedule } from '@/services/notificationService';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,6 +50,10 @@ export default function RootLayout() {
       }
     }
     checkOnboarding();
+  }, []);
+
+  useEffect(() => {
+    initializeAdMob();
   }, []);
 
   useEffect(() => {

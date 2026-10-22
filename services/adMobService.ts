@@ -30,11 +30,22 @@ export const ACTIVE_INTERSTITIAL_ID = __DEV__ ? ADMOB_TEST_UNITS.interstitial : 
 const SURAH_PLAY_COUNT_KEY = '@quranflow_surah_play_count_v1';
 const PENDING_AD_KEY = '@quranflow_pending_interstitial_v1';
 
-// Native Google Mobile Ads module (null saat di Expo Go / mode development)
-const MobileAds: any = null;
-const InterstitialAd: any = null;
-const AdEventType: any = null;
+// Native Google Mobile Ads module (aman di Expo Go & aktif di Standalone Production)
+let MobileAds: any = null;
+let InterstitialAd: any = null;
+let AdEventType: any = null;
 let loadedInterstitial: any = null;
+
+if (!isExpoGo) {
+    try {
+        const GoogleMobileAds = require('react-native-google-mobile-ads');
+        MobileAds = GoogleMobileAds.default || GoogleMobileAds.MobileAds;
+        InterstitialAd = GoogleMobileAds.InterstitialAd;
+        AdEventType = GoogleMobileAds.AdEventType;
+    } catch (e) {
+        console.warn('⚠️ [AdMob] Native module could not be loaded:', e);
+    }
+}
 
 export interface AdShowCallbacks {
     onAdWillShow?: () => void;
