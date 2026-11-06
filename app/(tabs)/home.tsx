@@ -37,7 +37,7 @@ export default function HomeScreen() {
     const { theme } = useTheme();
     const router = useRouter();
     const { playSurah, currentTrack, isPlaying, startSleepTimer, cancelSleepTimer, sleepTimerActive, position, duration, togglePlayPause, playNext } = useAudio();
-    const { favoriteQaris } = useFavorites();
+    const { favoriteQaris, favorites } = useFavorites();
     const { scrollHandler } = useTabBarAnimation();
 
     const PRAYER_LIST = [
@@ -78,7 +78,7 @@ export default function HomeScreen() {
     const heroQari = displayedFavoriteQaris.find(q => q.id === selectedQari.id) || displayedFavoriteQaris[0];
 
     // New Qaris for the "Qari baru" section matching reference
-    const NEW_QARI_IDS = ['ali_hudhaify', 'ahmed_kaseb', 'khalil_al_saghir'];
+    const NEW_QARI_IDS = ['hudhaify', 'tunaiji', 'baleela'];
     const newQaris = QARIS.filter(q => NEW_QARI_IDS.includes(q.id));
 
     // Tajwid Qaris for "Untuk tajwid" section
@@ -485,9 +485,9 @@ export default function HomeScreen() {
                     <BentoCard
                         icon="musical-notes"
                         title={t('tabs.playlist', 'Daftar Putar')}
-                        subtitle={t('home.playlistSubtitle', 'Tema & offline')}
+                        subtitle={t('home.myPlaylistsSubtitle', 'Daftar putar saya')}
                         accentColor="#8B5CF6"
-                        onPress={() => router.push('/(tabs)/playlist' as any)}
+                        onPress={() => router.push('/playlist' as any)}
                     />
                 </View>
 
@@ -497,27 +497,43 @@ export default function HomeScreen() {
                     onPressMore={() => router.push('/(tabs)/playlist' as any)}
                 />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-                    {THEMED_PLAYLISTS.map((pl) => (
-                        <TouchableOpacity
-                            key={pl.id}
-                            style={styles.playlistHomeCard}
-                            onPress={() => router.push('/(tabs)/playlist' as any)}
-                            activeOpacity={0.85}
-                        >
-                            <LinearGradient
-                                colors={pl.colors}
-                                style={styles.playlistCardGrad}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
+                    {THEMED_PLAYLISTS.map((pl) => {
+                        const count = pl.id === 'favorit' ? favorites.length : pl.surahNumbers.length;
+                        return (
+                            <TouchableOpacity
+                                key={pl.id}
+                                style={styles.playlistHomeCard}
+                                onPress={() => {
+                                    if (pl.id === 'favorit') {
+                                        router.push('/(tabs)/favorites' as any);
+                                    } else {
+                                        router.push({
+                                            pathname: '/(tabs)/playlist',
+                                            params: { playlistId: pl.id }
+                                        } as any);
+                                    }
+                                }}
+                                activeOpacity={0.85}
                             >
-                                <View style={[styles.playlistIconBadge, { backgroundColor: `${pl.accentColor}25` }]}>
-                                    <Ionicons name={pl.icon} size={20} color={pl.accentColor} />
-                                </View>
-                                <Text style={styles.playlistCardTitle} numberOfLines={1}>{pl.title}</Text>
-                                <Text style={styles.playlistCardCount}>{pl.surahNumbers.length} Surah</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    ))}
+                                <LinearGradient
+                                    colors={pl.colors}
+                                    style={styles.playlistCardGrad}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                >
+                                    <View style={[styles.playlistIconBadge, { backgroundColor: `${pl.accentColor}25` }]}>
+                                        <Ionicons
+                                            name={pl.id === 'favorit' ? 'heart' : pl.icon}
+                                            size={20}
+                                            color={pl.accentColor}
+                                        />
+                                    </View>
+                                    <Text style={styles.playlistCardTitle} numberOfLines={1}>{pl.title}</Text>
+                                    <Text style={styles.playlistCardCount}>{count} Surah</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
 
                 {/* Hero: Dari favorit Anda */}

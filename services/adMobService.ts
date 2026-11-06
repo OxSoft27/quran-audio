@@ -1,6 +1,6 @@
-import { AppState, Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { AppState } from 'react-native';
 
 // AdMob App ID
 export const ADMOB_APP_ID = 'ca-app-pub-5515124991118089~1890726735';

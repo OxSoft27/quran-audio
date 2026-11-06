@@ -23,10 +23,12 @@ import { useTabBarAnimation } from '@/context/TabBarAnimationContext';
 import Animated from 'react-native-reanimated';
 import { useAudio } from '@/context/AudioContext';
 import { useFavorites } from '@/context/FavoritesContext';
+import { usePlaylist } from '@/context/PlaylistContext';
 import { useDownload, DownloadedItem } from '@/context/DownloadContext';
 import { QARIS, Qari, getAudioUrl, fetchSurahs, Surah } from '@/services/quranApi';
 import { QariAvatar } from '@/components/QariAvatar';
 import { useTranslation } from 'react-i18next';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - Spacing.pagePadding * 2 - 12) / 2;
@@ -102,8 +104,10 @@ export default function PlaylistScreen() {
     const { t } = useTranslation();
     const { theme } = useTheme();
     const isDark = theme === 'dark';
+    const router = useRouter();
     const { playSurah, currentTrack } = useAudio();
     const { favorites } = useFavorites();
+    const { playlists } = usePlaylist();
     const { scrollHandler } = useTabBarAnimation();
     const { downloadedList, formattedStorageUsed, deleteDownloadedSurah } = useDownload();
 
@@ -112,9 +116,20 @@ export default function PlaylistScreen() {
     const [allSurahs, setAllSurahs] = useState<Surah[]>([]);
     const [showDownloadsModal, setShowDownloadsModal] = useState(false);
 
+    const params = useLocalSearchParams<{ playlistId?: string }>();
+
     React.useEffect(() => {
         loadSurahs();
     }, []);
+
+    React.useEffect(() => {
+        if (params.playlistId) {
+            const found = THEMED_PLAYLISTS.find((p) => p.id === params.playlistId);
+            if (found) {
+                setSelectedPlaylist(found);
+            }
+        }
+    }, [params.playlistId]);
 
     const loadSurahs = async () => {
         const data = await fetchSurahs();
@@ -140,8 +155,13 @@ export default function PlaylistScreen() {
     };
 
     const handlePlayAll = () => {
-        if (!selectedPlaylist || selectedPlaylist.surahNumbers.length === 0) return;
-        handlePlaySurahInPlaylist(selectedPlaylist.surahNumbers[0]);
+        if (!selectedPlaylist) return;
+        const targetSurahs =
+            selectedPlaylist.id === 'favorit'
+                ? allSurahs.filter((s) => favorites.some((f) => f.number === s.number))
+                : allSurahs.filter((s) => selectedPlaylist.surahNumbers.includes(s.number));
+        if (targetSurahs.length === 0) return;
+        handlePlaySurahInPlaylist(targetSurahs[0].number);
     };
 
     const handlePlayDownloaded = (item: DownloadedItem) => {
@@ -232,11 +252,105 @@ export default function PlaylistScreen() {
                     </TouchableOpacity>
                 </View>
 
+                {/* Section: Daftar Putar Saya */}
+                <View style={styles.userPlaylistSection}>
+                    <View style={styles.userPlaylistHeaderRow}>
+                        <Text style={[styles.userPlaylistTitle, { color: isDark ? '#FFFFFF' : '#111827' }]}>
+                            Daftar Putar Saya
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push('/playlist' as any);
+                            }}
+                            style={styles.seeAllUserPlaylistsBtn}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.seeAllUserPlaylistsText}>Kelola</Text>
+                            <Ionicons name="chevron-forward" size={13} color="#10B981" />
+                        </TouchableOpacity>
+                    </View>
+
+                    {playlists.length > 0 ? (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.userPlaylistScroll}
+                        >
+                            {playlists.map((pl) => (
+                                <TouchableOpacity
+                                    key={pl.id}
+                                    style={[
+                                        styles.userPlaylistCard,
+                                        {
+                                            backgroundColor: isDark ? '#141417' : '#FFFFFF',
+                                            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                                        },
+                                    ]}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        router.push('/playlist' as any);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.userPlaylistIconWrap}>
+                                        <Ionicons name="list" size={18} color="#10B981" />
+                                    </View>
+                                    <Text
+                                        style={[styles.userPlaylistCardName, { color: isDark ? '#FFFFFF' : '#111827' }]}
+                                        numberOfLines={1}
+                                    >
+                                        {pl.name}
+                                    </Text>
+                                    <Text style={[styles.userPlaylistCardSurahs, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                        {pl.surahs.length} Surah
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    ) : (
+                        <TouchableOpacity
+                            style={[
+                                styles.emptyUserPlaylistBanner,
+                                {
+                                    backgroundColor: isDark ? '#141417' : '#FFFFFF',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                                },
+                            ]}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push('/playlist' as any);
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <View style={styles.emptyUserPlaylistLeft}>
+                                <View style={styles.emptyUserPlaylistIcon}>
+                                    <Ionicons name="add" size={20} color="#10B981" />
+                                </View>
+                                <View>
+                                    <Text style={[styles.emptyUserPlaylistTitle, { color: isDark ? '#FFFFFF' : '#111827' }]}>
+                                        Buat Daftar Putar Baru
+                                    </Text>
+                                    <Text style={[styles.emptyUserPlaylistSub, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                        Kelompokkan surah favorit buatan Anda sendiri
+                                    </Text>
+                                </View>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color={isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Section Header: Koleksi Tematik */}
+                <Text style={[styles.themedSectionTitle, { color: isDark ? '#FFFFFF' : '#111827' }]}>
+                    Koleksi Tematik
+                </Text>
+
                 {/* 2-Column Grid of 6 Glowing Cards */}
                 <View style={styles.grid}>
                     {THEMED_PLAYLISTS.map((playlist) => {
                         const count =
-                            playlist.id === 'favorit' && favorites.length > 0
+                            playlist.id === 'favorit'
                                 ? favorites.length
                                 : playlist.surahNumbers.length;
 
@@ -351,11 +465,26 @@ export default function PlaylistScreen() {
 
                             {/* Surah List in Playlist */}
                             <FlatList
-                                data={allSurahs.filter((s) =>
-                                    selectedPlaylist.surahNumbers.includes(s.number)
-                                )}
+                                data={
+                                    selectedPlaylist.id === 'favorit'
+                                        ? allSurahs.filter((s) => favorites.some((f) => f.number === s.number))
+                                        : allSurahs.filter((s) =>
+                                              selectedPlaylist.surahNumbers.includes(s.number)
+                                          )
+                                }
                                 keyExtractor={(item) => item.number.toString()}
                                 contentContainerStyle={styles.modalList}
+                                ListEmptyComponent={
+                                    selectedPlaylist.id === 'favorit' ? (
+                                        <View style={styles.emptyFavoritesWrap}>
+                                            <Ionicons name="heart-outline" size={48} color="rgba(255, 255, 255, 0.25)" />
+                                            <Text style={styles.emptyFavoritesTitle}>Belum ada surah favorit</Text>
+                                            <Text style={styles.emptyFavoritesSub}>
+                                                Ketuk ikon hati pada surah untuk menambahkannya ke koleksi favorit Anda
+                                            </Text>
+                                        </View>
+                                    ) : null
+                                }
                                 renderItem={({ item, index }) => {
                                     const isPlayingThis =
                                         currentTrack?.surahNumber === item.number;
@@ -776,5 +905,112 @@ const styles = StyleSheet.create({
     deleteDownloadBtn: {
         padding: 8,
         marginLeft: 8,
+    },
+    userPlaylistSection: {
+        marginBottom: Spacing.xl,
+    },
+    userPlaylistHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.pagePadding,
+        marginBottom: 12,
+    },
+    userPlaylistTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    seeAllUserPlaylistsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    seeAllUserPlaylistsText: {
+        color: '#10B981',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    userPlaylistScroll: {
+        paddingHorizontal: Spacing.pagePadding,
+        gap: 12,
+    },
+    userPlaylistCard: {
+        width: 136,
+        padding: 14,
+        borderRadius: 16,
+        borderWidth: 1,
+    },
+    userPlaylistIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    userPlaylistCardName: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 3,
+    },
+    userPlaylistCardSurahs: {
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    emptyUserPlaylistBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginHorizontal: Spacing.pagePadding,
+        padding: 14,
+        borderRadius: 16,
+        borderWidth: 1,
+    },
+    emptyUserPlaylistLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        flex: 1,
+    },
+    emptyUserPlaylistIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyUserPlaylistTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 2,
+    },
+    emptyUserPlaylistSub: {
+        fontSize: 11,
+    },
+    themedSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        paddingHorizontal: Spacing.pagePadding,
+        marginBottom: 12,
+    },
+    emptyFavoritesWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 48,
+        paddingHorizontal: 32,
+        gap: 10,
+    },
+    emptyFavoritesTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
+    emptyFavoritesSub: {
+        fontSize: 12,
+        color: 'rgba(255, 255, 255, 0.5)',
+        textAlign: 'center',
+        lineHeight: 18,
     },
 });

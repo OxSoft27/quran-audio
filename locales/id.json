@@ -52,7 +52,8 @@
     "sleepTimer": "Timer Tidur",
     "sleepTimerActive": "Sedang berjalan",
     "sleepTimerAuto": "Mati otomatis",
-    "playlistSubtitle": "Tema & offline"
+    "playlistSubtitle": "Tema & offline",
+    "myPlaylistsSubtitle": "Daftar putar saya"
   },
   "qari": {
     "title": "Pilih Qari",

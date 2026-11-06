@@ -52,7 +52,8 @@
     "sleepTimer": "Sleep Timer",
     "sleepTimerActive": "Running",
     "sleepTimerAuto": "Auto stop",
-    "playlistSubtitle": "Themes & offline"
+    "playlistSubtitle": "Themes & offline",
+    "myPlaylistsSubtitle": "My playlists"
   },
   "qari": {
     "title": "Select Reciter",

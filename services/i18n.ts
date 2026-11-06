@@ -1,12 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Localization from 'expo-localization';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
-import { AppState, Linking, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Linking } from 'react-native';
 
-import id from '../locales/id.json';
-import en from '../locales/en.json';
 import ar from '../locales/ar.json';
+import en from '../locales/en.json';
+import id from '../locales/id.json';
 
 export const LANGUAGE_STORAGE_KEY = '@user_preferred_language';
 

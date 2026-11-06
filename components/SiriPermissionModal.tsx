@@ -1,19 +1,18 @@
+import { Spacing } from '@/constants/Spacing';
+import { Typography } from '@/constants/Typography';
+import { useTheme } from '@/context/ThemeContext';
+import { BlurView } from 'expo-blur';
 import React from 'react';
 import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   Dimensions,
+  Image,
+  Modal,
   Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '@/constants/Typography';
-import { Spacing } from '@/constants/Spacing';
-import { useTheme } from '@/context/ThemeContext';
 
 interface SiriPermissionModalProps {
   visible: boolean;
@@ -56,23 +55,13 @@ export const SiriPermissionModal: React.FC<SiriPermissionModalProps> = ({
             },
           ]}
         >
-          {/* Siri Glowing Icon */}
+          {/* Official Siri Icon */}
           <View style={styles.siriIconWrapper}>
-            <LinearGradient
-              colors={['#0F0F14', '#1A1C24']}
-              style={styles.siriIconBase}
-            >
-              <LinearGradient
-                colors={['#FF3B70', '#A259FF', '#38E1FF', '#4BD1A0']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.siriOrb}
-              >
-                <View style={styles.siriInnerCore}>
-                  <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                </View>
-              </LinearGradient>
-            </LinearGradient>
+            <Image
+              source={require('@/assets/images/siri_icon.png')}
+              style={styles.siriIcon}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Title */}
@@ -185,35 +174,14 @@ const styles = StyleSheet.create({
   siriIconWrapper: {
     marginBottom: Spacing.md,
   },
-  siriIconBase: {
-    width: 54,
-    height: 54,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    shadowColor: '#A259FF',
+  siriIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  siriOrb: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 2,
-  },
-  siriInnerCore: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
-    backgroundColor: 'rgba(10, 10, 20, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
   title: {
     fontSize: Typography.size.headline,

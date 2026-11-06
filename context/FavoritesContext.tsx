@@ -3,10 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export const DEFAULT_FAVORITE_QARIS = [
-    'abdul_rashid_sufi',
-    'okasha_kameny',
-    'abdulbasit_qobilov',
-    'abdullah_buayjaan',
+    'mishary',
+    'sudais',
+    'maher',
+    'yasser_dosari',
 ];
 
 interface FavoritesContextType {

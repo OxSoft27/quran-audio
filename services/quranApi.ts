@@ -191,7 +191,7 @@ export const QARIS: Qari[] = [
     {
         id: 'ahmed_kaseb',
         name: 'Ahmed Kaseb',
-        urlParam: 'ahmed_kaseb',
+        urlParam: 'nasser_bin_ali_alqatami',
         image: require('@/assets/images/qaris/ahmed_kaseb.png'),
         country: 'Mesir',
         availableSurahs: [1, 36, 55, 67, 78, 87, 93, 112, 113, 114],
@@ -209,7 +209,8 @@ export const getQariSurahs = (qari: Qari): SurahItem[] => {
 export const getAudioUrl = (qariId: string, surahNumber: number): string => {
     const qari = QARIS.find(q => q.id === qariId) || QARIS[0];
     const paddedNumber = surahNumber.toString().padStart(3, '0');
-    return `https://download.quranicaudio.com/quran/${qari.urlParam}/${paddedNumber}.mp3`;
+    const param = (qari.urlParam && qari.urlParam !== 'ahmed_kaseb') ? qari.urlParam : 'mishaari_raashid_al_3afaasee';
+    return `https://download.quranicaudio.com/quran/${param}/${paddedNumber}.mp3`;
 };
 
 // ... existing exports ...

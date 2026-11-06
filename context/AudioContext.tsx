@@ -103,6 +103,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const player = useAudioPlayer(null, {
         updateInterval: 500,
         keepAudioSessionActive: true,
+        preferredForwardBufferDuration: 30,
     });
     const status = useAudioPlayerStatus(player);
     const { getLocalAudioUri } = useDownload();
@@ -141,6 +142,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const playbackSpeedRef = useRef(playbackSpeed);
     const volumeRef = useRef(volume);
     const isAutoAdvancingRef = useRef(false);
+    const isUserPausedRef = useRef(false);
+    const stallRecoveryTimeoutRef = useRef<any>(null);
 
     useEffect(() => { autoPlayRef.current = isAutoPlayEnabled; }, [isAutoPlayEnabled]);
     useEffect(() => { surahListRef.current = surahList; }, [surahList]);
@@ -346,6 +349,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setSleepTimerActive(true);
 
         const id = setTimeout(() => {
+            isUserPausedRef.current = true;
             player.pause();
             setSleepTimerActive(false);
             setSleepTimerId(null);
@@ -607,7 +611,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         }
     }, [playNext]);
 
-    // 1. Direct native event listener on player for immediate auto-advance
+    // 1. Direct native event listener on player for completion & stall recovery
     useEffect(() => {
         if (!player) return;
 
@@ -620,20 +624,44 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            // Condition 2: Fallback when audio reaches EOF and playback stops
+            // Condition 2: Fallback when audio reaches EOF and playback stops (with 2.5s tolerance for trailing silence/VBR)
             if (
                 statusUpdate.duration > 1 &&
                 statusUpdate.currentTime > 0 &&
-                statusUpdate.currentTime >= statusUpdate.duration - 0.75 &&
+                statusUpdate.currentTime >= Math.max(1, statusUpdate.duration - 2.5) &&
                 !statusUpdate.playing &&
                 !statusUpdate.isBuffering
             ) {
                 handleAutoNext();
+                return;
+            }
+
+            // Condition 3: Automatic stall recovery if audio playback drops in the middle of recitation
+            if (
+                !statusUpdate.playing &&
+                !isUserPausedRef.current &&
+                !isAutoAdvancingRef.current &&
+                currentTrackRef.current &&
+                statusUpdate.duration > 5 &&
+                statusUpdate.currentTime > 0.5 &&
+                statusUpdate.currentTime < Math.max(1, statusUpdate.duration - 3.0) &&
+                !statusUpdate.isBuffering
+            ) {
+                if (stallRecoveryTimeoutRef.current) clearTimeout(stallRecoveryTimeoutRef.current);
+                stallRecoveryTimeoutRef.current = setTimeout(() => {
+                    try {
+                        if (player && !player.playing && !isUserPausedRef.current) {
+                            console.log('[AudioContext] Auto-recovering stalled audio playback at:', statusUpdate.currentTime);
+                            player.play();
+                        }
+                    } catch (_) { }
+                }, 400);
             }
         });
 
         return () => {
             subscription?.remove?.();
+            if (stallRecoveryTimeoutRef.current) clearTimeout(stallRecoveryTimeoutRef.current);
         };
     }, [player, handleAutoNext]);
 
@@ -644,7 +672,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         } else if (
             status.duration > 1 &&
             status.currentTime > 0 &&
-            status.currentTime >= status.duration - 0.75 &&
+            status.currentTime >= Math.max(1, status.duration - 2.5) &&
             !status.playing &&
             !status.isBuffering
         ) {
@@ -654,6 +682,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     // Public exposed function
     const playSurah = useCallback(async (url: string, details: TitleDetails) => {
+        isUserPausedRef.current = false;
         await playSurahInternal(url, details);
     }, [playSurahInternal]);
 
@@ -665,6 +694,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     const togglePlayPause = async () => {
         if (player.playing) {
+            isUserPausedRef.current = true;
             player.pause();
             if (currentTrack) {
                 WidgetBridge.setWidgetData({
@@ -675,6 +705,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
                 });
             }
         } else {
+            isUserPausedRef.current = false;
             player.play();
             if (currentTrack) {
                 WidgetBridge.setWidgetData({
@@ -692,6 +723,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     };
 
     const stop = async () => {
+        isUserPausedRef.current = true;
         player.pause();
         await player.seekTo(0);
         player.clearLockScreenControls();

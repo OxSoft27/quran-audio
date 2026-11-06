@@ -9,14 +9,21 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native & Secrets
 .kotlin/
 *.orig.*
 *.jks
 *.p8
 *.p12
 *.key
+*.keystore
 *.mobileprovision
+*.cer
+*.cert
+*.pem
+credentials.json
+google-services.json
+GoogleService-Info.plist
 
 # Metro
 .metro-health-check*
