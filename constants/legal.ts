@@ -4,8 +4,8 @@ import * as WebBrowser from 'expo-web-browser';
  * Legal URLs and helpers for App Store Review compliance (Guidelines 3.1.2 & 5.1.1)
  */
 export const LEGAL_URLS = {
-    // URL Privacy Policy dari Flycricket
-    privacyPolicy: 'https://doc-hosting.flycricket.io/quranflow/40241d65-e474-401a-b012-eed4a91b44d3/privacy',
+    // URL Privacy Policy dari Lunaris Dev
+    privacyPolicy: 'https://lunarisdev.blogspot.com/2026/11/privacy-policy-lunaris-dev.html',
     // Standard Apple Licensed Application End User License Agreement (EULA)
     termsOfService: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
 };
