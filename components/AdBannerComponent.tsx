@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, AppState } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSubscription } from '@/context/SubscriptionContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useTabBarAnimation } from '@/context/TabBarAnimationContext';
-import { ACTIVE_BANNER_ID, isExpoGo } from '@/services/adMobService';
+import {
+    ACTIVE_BANNER_ID,
+    isAdMobReady,
+    isExpoGo,
+    subscribeAdMobReady,
+} from '@/services/adMobService';
 import { Ionicons } from '@expo/vector-icons';
 import { PremiumPaywallModal } from '@/components/PremiumPaywallModal';
 
@@ -33,6 +38,42 @@ export const AdBannerComponent: React.FC<AdBannerComponentProps> = ({ bottomOffs
     const { adBannerAnimatedStyle } = useTabBarAnimation();
     const [paywallVisible, setPaywallVisible] = useState(false);
     const [adLoaded, setAdLoaded] = useState(false);
+    const [sdkReady, setSdkReady] = useState(() => isAdMobReady());
+    const bannerRef = useRef<any>(null);
+    const retryCountRef = useRef(0);
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (sdkReady) return;
+        const unsubscribe = subscribeAdMobReady(() => {
+            setSdkReady(true);
+        });
+        // Fallback aman jika inisialisasi tertunda agar BannerAd tetap mencoba memuat
+        const fallbackTimer = setTimeout(() => setSdkReady(true), 3000);
+        return () => {
+            unsubscribe();
+            clearTimeout(fallbackTimer);
+        };
+    }, [sdkReady]);
+
+    useEffect(() => {
+        if (isExpoGo || !BannerAd) return;
+
+        const subscription = AppState.addEventListener('change', (nextState) => {
+            if (nextState === 'active' && Platform.OS === 'ios' && sdkReady && !adLoaded) {
+                try {
+                    bannerRef.current?.load?.();
+                } catch (_) { }
+            }
+        });
+
+        return () => {
+            subscription.remove();
+            if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+            }
+        };
+    }, [sdkReady, adLoaded]);
 
     // Pengguna Premium 100% bebas dari segala jenis iklan
     if (isPremium) {
@@ -82,30 +123,55 @@ export const AdBannerComponent: React.FC<AdBannerComponentProps> = ({ bottomOffs
         );
     }
 
+    // Tunggu SDK AdMob selesai inisialisasi sebelum mounting BannerAd
+    if (!sdkReady) {
+        return null;
+    }
+
     // Tampilan di Native Build (Production / Real Google AdMob Banner)
     return (
-        <Animated.View style={[
-            styles.container,
-            {
-                bottom: bottomOffset,
-                backgroundColor: 'transparent',
-                borderWidth: 0,
-                elevation: 0,
-                shadowOpacity: 0,
-            },
-            adBannerAnimatedStyle,
-            !adLoaded && { height: 0, opacity: 0, overflow: 'hidden' }
-        ]}>
+        <Animated.View
+            pointerEvents={adLoaded ? 'auto' : 'none'}
+            style={[
+                styles.container,
+                {
+                    bottom: bottomOffset,
+                    backgroundColor: 'transparent',
+                    borderWidth: 0,
+                    elevation: 0,
+                    shadowOpacity: 0,
+                },
+                adBannerAnimatedStyle,
+            ]}
+        >
             <BannerAd
+                ref={bannerRef}
                 unitId={ACTIVE_BANNER_ID}
                 size={BannerAdSize?.ANCHORED_ADAPTIVE_BANNER || BannerAdSize?.BANNER}
                 requestOptions={{
                     requestNonPersonalizedAdsOnly: true,
                 }}
-                onAdLoaded={() => setAdLoaded(true)}
+                onAdLoaded={() => {
+                    retryCountRef.current = 0;
+                    if (retryTimeoutRef.current) {
+                        clearTimeout(retryTimeoutRef.current);
+                        retryTimeoutRef.current = null;
+                    }
+                    setAdLoaded(true);
+                }}
                 onAdFailedToLoad={(error: any) => {
                     console.warn('AdMob Banner failed to load:', error);
                     setAdLoaded(false);
+                    if (retryCountRef.current < 3) {
+                        const delayMs = 20000 * (retryCountRef.current + 1);
+                        retryCountRef.current += 1;
+                        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                        retryTimeoutRef.current = setTimeout(() => {
+                            try {
+                                bannerRef.current?.load?.();
+                            } catch (_) { }
+                        }, delayMs);
+                    }
                 }}
             />
         </Animated.View>

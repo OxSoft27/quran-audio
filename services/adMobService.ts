@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 // AdMob App ID
 export const ADMOB_APP_ID = 'ca-app-pub-5515124991118089~1890726735';
@@ -35,6 +35,37 @@ let MobileAds: any = null;
 let InterstitialAd: any = null;
 let AdEventType: any = null;
 let loadedInterstitial: any = null;
+let adMobReady = false;
+let initPromise: Promise<void> | null = null;
+let interstitialRetryCount = 0;
+let interstitialRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+const readyListeners = new Set<() => void>();
+
+function markAdMobReady(): void {
+    if (adMobReady) return;
+    adMobReady = true;
+    readyListeners.forEach((listener) => {
+        try {
+            listener();
+        } catch (_) { }
+    });
+    readyListeners.clear();
+}
+
+export function isAdMobReady(): boolean {
+    return adMobReady;
+}
+
+export function subscribeAdMobReady(listener: () => void): () => void {
+    if (adMobReady) {
+        listener();
+        return () => { };
+    }
+    readyListeners.add(listener);
+    return () => {
+        readyListeners.delete(listener);
+    };
+}
 
 if (!isExpoGo) {
     try {
@@ -58,16 +89,32 @@ export interface AdShowCallbacks {
 export async function initializeAdMob(): Promise<void> {
     if (isExpoGo || !MobileAds) {
         console.log('ℹ️ [AdMob] Mode Expo Go / Simulasi aktif. Modul native AdMob dinonaktifkan.');
+        markAdMobReady();
         return;
     }
 
-    try {
-        await MobileAds().initialize();
-        console.log('✅ [AdMob] Google Mobile Ads berhasil diinisialisasi.');
-        preloadInterstitial();
-    } catch (error) {
-        console.warn('⚠️ [AdMob] Gagal inisialisasi AdMob:', error);
+    if (initPromise) {
+        return initPromise;
     }
+
+    initPromise = (async () => {
+        try {
+            const mobileAds = MobileAds();
+            await mobileAds.initialize();
+            if (Platform.OS === 'ios' && typeof mobileAds.setAudioSessionIsApplicationManaged === 'function') {
+                mobileAds.setAudioSessionIsApplicationManaged(true);
+            }
+            console.log('✅ [AdMob] Google Mobile Ads berhasil diinisialisasi.');
+            markAdMobReady();
+            preloadInterstitial();
+        } catch (error) {
+            console.warn('⚠️ [AdMob] Gagal inisialisasi AdMob:', error);
+            // Tetap tandai siap agar BannerAd tidak terblokir permanen jika init gagal sementara
+            markAdMobReady();
+        }
+    })();
+
+    return initPromise;
 }
 
 /**
@@ -76,6 +123,11 @@ export async function initializeAdMob(): Promise<void> {
 function preloadInterstitial(): void {
     if (isExpoGo || !InterstitialAd) return;
 
+    if (interstitialRetryTimeout) {
+        clearTimeout(interstitialRetryTimeout);
+        interstitialRetryTimeout = null;
+    }
+
     try {
         const ad = InterstitialAd.createForAdRequest(ACTIVE_INTERSTITIAL_ID, {
             requestNonPersonalizedAdsOnly: true, // Non-personalized ads sesuai standar privasi
@@ -83,6 +135,7 @@ function preloadInterstitial(): void {
 
         ad.addAdEventListener(AdEventType.LOADED, () => {
             loadedInterstitial = ad;
+            interstitialRetryCount = 0;
             console.log('✅ [AdMob] Interstitial Ad siap ditayangkan.');
         });
 
@@ -95,6 +148,13 @@ function preloadInterstitial(): void {
         ad.addAdEventListener(AdEventType.ERROR, (err: any) => {
             console.warn('⚠️ [AdMob] Interstitial gagal dimuat:', err);
             loadedInterstitial = null;
+            if (interstitialRetryCount < 4) {
+                const delayMs = Math.min(60000, 15000 * (interstitialRetryCount + 1));
+                interstitialRetryCount += 1;
+                interstitialRetryTimeout = setTimeout(() => {
+                    preloadInterstitial();
+                }, delayMs);
+            }
         });
 
         ad.load();
